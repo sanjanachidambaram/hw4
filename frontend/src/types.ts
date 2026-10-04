@@ -21,10 +21,16 @@ export interface ProductDetail extends Product {
   inventory: SizeStock[];
 }
 
-/** Matches ChatResponse in backend/models.py. */
+/** The fields a product card needs. Both full products and chat results have them. */
+export type CardProduct = Pick<
+  Product,
+  "product_id" | "name" | "price" | "description" | "image_url" | "total_stock"
+>;
+
+/** Matches ChatResponse in backend/models.py, after checking (see parseChatReply in api.ts). */
 export interface ChatReply {
   reply: string;
-  products: { product_id: string; name: string; price: number }[];
+  products: CardProduct[];
 }
 
 /** The only user details the backend sends to the browser. */

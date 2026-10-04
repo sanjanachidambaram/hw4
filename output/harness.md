@@ -275,3 +275,106 @@ I left out `garment_type` (the description already says what kind of item it is)
 | What about XXXL? | "The Baseball Left Chest Crewneck doesn't come in XXXL. It comes in XS, S, M, L, XL, and XXL." | ✅ |
 | How much is the Harvard Crimson Hoodie? | "Sorry, I couldn't find a Harvard Crimson Hoodie in our shop. I did find several Yale hoodies, including the Basic Hoodie Big Yale for $68." | ✅ |
 | Do you have the Baseball Left Chest Crewneck in XS? (after the fix) | "Sorry, XS is sold out for the Baseball Left Chest Crewneck. We still have S, M, L, and XXL." | ✅ matches the database exactly |
+
+---
+
+# Chat search that updates the page (Problem 7)
+
+**Note:** `search_catalogue` replaces Problem 6's `search_products`. Two near-identical search tools would confuse the agent. The other two tools (`get_product_details`, `check_size_stock`) are unchanged.
+
+## The flow, start to finish
+
+```
+Customer types "Do you have any hoodies?"
+        │
+        ▼
+① ChatWidget.tsx ── POST /api/chat {"message": "..."} ──►  main.py  chat()
+                                                                │
+② agent.py runs the AI with the instructions in prompts/prompt.md
+        │
+        ├─► AI calls search_catalogue("hoodie", 6)          (tools.py)
+        │     reads the catalogue READ-ONLY, returns a list of matches:
+        │     [{product_id, name, category, price, in_stock}, ...]   or  []
+        │     and records each returned id in deps.seen_ids
+        │
+        ▼
+③ AI must answer in this exact shape (AgentReply in models.py):
+        {"reply": "Good news, we have several hoodies…",
+         "product_ids": ["basic-hoodie-big-yale", ...]}
+        │
+        ▼
+④ main.py build_product_cards():
+        • keeps only ids that a tool really returned this turn (no made-up ids)
+        • drops duplicates, caps at 8
+        • looks up each card's name, price, description, image, stock in the DATABASE
+        │
+        ▼
+⑤ Response to the browser (ChatResponse in models.py):
+        {"reply": "Good news…",
+         "products": [{product_id, name, price, description, image_url, total_stock}, ...]}
+        │
+        ▼
+⑥ api.ts parseChatReply() checks the response before anything is drawn:
+        • products missing / not a list / null      → []  (text only)
+        • any card missing a field or with a bad type → that card is dropped
+        • image_url not starting with /api/images/    → that card is dropped
+        • reply missing                              → a generic "something went wrong" line
+        │
+        ▼
+⑦ ChatWidget.tsx shows the reply text, and ONLY IF products has at least 1 item,
+   a 2-column grid of <ProductCard>s (the same component as the Products page).
+```
+
+## Why the AI only picks ids, not card details
+The AI decides **which** products fit, but every detail on a card comes from the database in step ④. So the AI can't show a wrong price, a fake product, or a broken image, even if it makes a mistake in its text.
+
+## How `search_catalogue(query, limit, sort)` matches
+- It looks at the **name, category (`garment_type`), and description**, ignoring capital letters.
+- It matches **whole words**, so "shirt" doesn't match "sweatshirt". Plurals work ("hoodies" finds "hoodie").
+- **Every** meaningful word must match, so "navy hoodie" means navy *and* hoodie. Filler words like "do", "you", and "have" are ignored.
+- Name and category matches rank above description-only matches.
+- `limit` is 1–12 (default 6). The optional `sort` can be `relevance` (default), `price_low`, or `price_high`.
+- **No match returns an empty list `[]`, never an error.**
+
+## Why clicking chat-added cards works (the "late listener" trap)
+In plain JavaScript, `document.querySelectorAll('.card').forEach(c => c.addEventListener('click', …))` only wires up cards that exist when it runs. Cards added later get no listener. This site avoids that in two ways:
+1. **Each card is a real link** (`<a href="/products/basic-hoodie-big-yale">`, made by React Router's `<Link>`). A link knows where it goes on its own; it doesn't need a listener added afterward.
+2. **React listens once at the top of the page** (event delegation). Any click on any card, whenever it was added, bubbles up to that single listener.
+
+The chat uses the exact same `ProductCard` component as the Products page, so both kinds of cards behave identically.
+
+## Checks run before calling it done
+
+| # | Check | Result |
+|---|---|---|
+| 1 | Ask for something we sell ("Do you have any hoodies?") | ✅ Reply text plus 6 hoodie cards with image, name, price, and short info |
+| 2 | Ask for something we don't sell ("Do you sell gym shorts?") | ✅ Text only: "Sorry, I couldn't find gym shorts in our shop…". No grid, no errors, nothing in the console |
+| 3a | Click a card that was on the Products page from the start | ✅ Opened the Saybrook College Crewneck detail page (big image, $58.00, 6 sizes) |
+| 3b | Click a card the chat just added | ✅ Opened the Brooks Brothers hoodie detail page (big image, $88.00, 6 sizes). The chat stayed open |
+| Extra | Weird data fed to `parseChatReply` (null, a string, products not a list, broken items, a `javascript:` image link, missing reply) | ✅ All 9 cases ended up as text only, or with only the valid cards. No crash |
+| Extra | Offline search tests (hoodies, HOODIES, t-shirts, Saybrook, gym shorts, empty query, …) | ✅ Correct matches, and `[]` for no match |
+
+**A bug found and fixed during testing:** the first hoodie answer said "prices start at $68". The search only returned the first 6 of our 26 hoodies, so the AI never saw the $45 ones. I added the optional `sort` setting and a prompt rule against describing a whole range from one partial search. Re-test: "What's your cheapest hoodie?" → "The cheapest hoodie I found is the Yale Sports Hoodie Tennis at $45", with 1 card. ✅
+
+AI messages used for Problem 7: **4**.
+
+## Bug fix: "Sorry, that one took me too long to look up" (asking for a gray shirt)
+
+**What happened.** For "Do you have a gray shirt?", the search worked and returned 6 gray t-shirts. But the search results didn't include colors, and the instructions said every color answer had to come from a tool. So the AI then called `get_product_details` **on all 6 shirts** to confirm they were gray. 1 search + 6 detail lookups + the final answer went over the limit of 6 tool calls per question, and the whole answer was thrown away.
+
+**The underlying problems and fixes:**
+| Problem | Fix |
+|---|---|
+| Search results didn't include colors, so the AI had to open every product to answer a color question | `CatalogueMatch` now includes `colors`, and `search_catalogue` also searches the `colors` column |
+| Instructions pushed the AI to re-verify everything | `prompt.md` now says search results already count as looked up. Answer browsing questions from them, and only call `get_product_details` for one specific product |
+| The tool-call limit was too tight, and it limited the wrong thing. Tool calls are free local database reads, and the AI often makes several at once | `tool_calls_limit` raised from 6 to 12. The real cost guards stay: 5 AI round-trips per question, plus a new 40,000 input-token cap. Reply length raised from 400 to 600 tokens so a list of products fits |
+| "grey shirt" and "gray tee" found nothing (the catalogue says "gray" and "T-shirt") | `search_catalogue` maps common variants: grey→gray, tee/tees/tshirt→shirt, hoody→hoodie, and so on |
+| Products that only mentioned a color in their description ranked the same as ones that list it | Ranking is now: name/category match > listed color > description only |
+
+**Before vs. after, for "Do you have a gray shirt?":**
+| | AI round-trips | Tool calls | Result |
+|---|---|---|---|
+| Before | 3 | 8 (1 search + 6 detail lookups + final answer) | ❌ "took me too long" error |
+| After | 2 | 1 | ✅ "Yep! We have several gray and heather gray shirts, including the 2025 Yale Vs Harvard T Shirt, Boola Boola T Shirt, and District Tri Blend T Shirt Vintage Shield, all $32.00." + 3 cards (4,708 input tokens) |
+
+AI messages used for this fix: 2 (one traced diagnosis with the limits loosened, one re-test).

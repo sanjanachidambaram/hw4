@@ -22,6 +22,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import UsageLimits
 
+from models import AgentReply
 from tools import ALL_TOOLS, ChatDeps
 
 BACKEND_DIR = Path(__file__).resolve().parent
@@ -31,9 +32,11 @@ COURSE_ENV_PATH = BACKEND_DIR.parent.parent / ".env"  # AI Foundations/.env
 MODEL_NAME = "gpt-5.6-luna"
 PORTKEY_BASE_URL = "https://api.portkey.ai/v1"
 
-# Budget guards: every AI call costs real money.
-MODEL_SETTINGS = ModelSettings(max_tokens=400, timeout=30)
-USAGE_LIMITS = UsageLimits(request_limit=5, tool_calls_limit=6)
+# Budget guards: every AI round-trip costs real money, so cap round-trips and
+# tokens. Tool calls themselves are free local database reads, and the AI
+# often makes several at once in one round-trip, so their cap is looser.
+MODEL_SETTINGS = ModelSettings(max_tokens=600, timeout=30)
+USAGE_LIMITS = UsageLimits(request_limit=5, tool_calls_limit=12, input_tokens_limit=40_000)
 
 # How much earlier conversation the AI sees, counted in back-and-forth turns.
 HISTORY_TURNS = 6
@@ -52,7 +55,7 @@ def _load_portkey_key() -> str:
 
 
 @lru_cache(maxsize=1)
-def get_agent() -> Agent[ChatDeps, str]:
+def get_agent() -> Agent[ChatDeps, AgentReply]:
     """Build the agent once, the first time someone chats."""
     key = _load_portkey_key()
     client = AsyncOpenAI(
@@ -65,6 +68,7 @@ def get_agent() -> Agent[ChatDeps, str]:
     agent = Agent(
         model,
         deps_type=ChatDeps,
+        output_type=AgentReply,  # reply text + product_ids to show as cards
         instructions=PROMPT_PATH.read_text(encoding="utf-8"),
         tools=ALL_TOOLS,
         model_settings=MODEL_SETTINGS,
@@ -102,8 +106,12 @@ def save_turn(chat_id: str, new_messages: list[ModelMessage]) -> None:
         _conversations.popitem(last=False)
 
 
-async def ask(message: str, chat_id: str, first_name: str | None) -> tuple[str, ChatDeps]:
-    """Send one customer message to the agent and return its reply."""
+async def ask(message: str, chat_id: str, first_name: str | None) -> tuple[AgentReply, ChatDeps]:
+    """Send one customer message to the agent and return its reply.
+
+    Returns the AI's AgentReply (text + product_ids) and the deps, whose
+    seen_ids lists every product a tool actually returned this turn.
+    """
     deps = ChatDeps(first_name=first_name)
     result = await get_agent().run(
         message,

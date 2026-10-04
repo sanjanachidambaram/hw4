@@ -16,21 +16,41 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=MAX_MESSAGE_LENGTH)
 
 
-class ProductLink(BaseModel):
-    """A product the assistant looked up, so the chat box can link to it."""
+class ChatProductCard(BaseModel):
+    """Everything the chat box needs to draw one product card."""
 
     product_id: str
     name: str
     price: float
+    description: str
+    image_url: str
+    total_stock: int
 
 
 class ChatResponse(BaseModel):
     """What POST /api/chat sends back to the chat box."""
 
     reply: str
-    products: list[ProductLink] = Field(
+    products: list[ChatProductCard] = Field(
         default_factory=list,
-        description="Products the assistant looked up while answering.",
+        description="Product cards to show under the reply. Empty means text only.",
+    )
+
+
+class AgentReply(BaseModel):
+    """What the AI itself must return: its chatty text plus which products to show.
+
+    The AI only picks product ids. The server fills in the real card details
+    from the database, so the AI can't invent a product, price, or image.
+    """
+
+    reply: str = Field(description="Your friendly answer to the customer, in plain text.")
+    product_ids: list[str] = Field(
+        default_factory=list,
+        description=(
+            "product_id values from this turn's tool results that the customer should "
+            "see as cards. Empty list if no products are relevant."
+        ),
     )
 
 
@@ -43,11 +63,13 @@ class SizeStock(BaseModel):
     quantity: int = Field(description="Units in stock. 0 means sold out.")
 
 
-class ProductSearchResult(BaseModel):
-    """One match from search_products: just enough to pick the right product."""
+class CatalogueMatch(BaseModel):
+    """One match from search_catalogue: just enough to pick the right products."""
 
-    product_id: str = Field(description="Use this id with the other tools.")
+    product_id: str = Field(description="Use this id with the other tools and in product_ids.")
     name: str
+    category: str = Field(description="Kind of item, e.g. 'pullover hoodie'.")
+    colors: list[str] = Field(description="Colors this product comes in.")
     price: float = Field(description="Price in US dollars.")
     in_stock: bool = Field(description="True if at least one size is available.")
 

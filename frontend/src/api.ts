@@ -1,6 +1,6 @@
 // Every call to the backend goes through this file, so there's one place
 // to change if the backend address changes.
-import type { ChatReply, Product, ProductDetail, User } from "./types";
+import type { CardProduct, ChatReply, Product, ProductDetail, User } from "./types";
 
 export const API_BASE =
   import.meta.env.VITE_API_URL ?? "http://localhost:8000";
@@ -46,12 +46,43 @@ export function fetchProduct(productId: string): Promise<ProductDetail> {
   return request<ProductDetail>(`/api/products/${encodeURIComponent(productId)}`);
 }
 
-export function imageUrl(product: Product): string {
+export function imageUrl(product: Pick<Product, "image_url">): string {
   return `${API_BASE}${product.image_url}`;
 }
 
-export function sendChatMessage(message: string): Promise<ChatReply> {
-  return post<ChatReply>("/api/chat", { message });
+export async function sendChatMessage(message: string): Promise<ChatReply> {
+  const data = await post<unknown>("/api/chat", { message });
+  return parseChatReply(data);
+}
+
+/** True if the value looks like one usable product card. */
+function isCardProduct(value: unknown): value is CardProduct {
+  if (typeof value !== "object" || value === null) return false;
+  const p = value as Record<string, unknown>;
+  return (
+    typeof p.product_id === "string" && p.product_id.length > 0 &&
+    typeof p.name === "string" &&
+    typeof p.price === "number" && Number.isFinite(p.price) &&
+    typeof p.description === "string" &&
+    typeof p.image_url === "string" && p.image_url.startsWith("/api/images/") &&
+    typeof p.total_stock === "number"
+  );
+}
+
+/**
+ * Check the chat response before the page draws anything.
+ * - reply missing or not text -> a generic message
+ * - products missing, not a list, or malformed -> bad items are dropped
+ * So the worst case is "text only", never a crash or a broken card.
+ */
+export function parseChatReply(data: unknown): ChatReply {
+  const obj = (typeof data === "object" && data !== null ? data : {}) as Record<string, unknown>;
+  const reply =
+    typeof obj.reply === "string" && obj.reply.trim()
+      ? obj.reply
+      : "Sorry, something went wrong with that answer. Please try again.";
+  const products = Array.isArray(obj.products) ? obj.products.filter(isCardProduct) : [];
+  return { reply, products };
 }
 
 // ---------- Accounts ----------

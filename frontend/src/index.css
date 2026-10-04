@@ -295,8 +295,8 @@ h3 {
 }
 
 .chat-panel {
-  width: 340px;
-  height: 460px;
+  width: 380px;
+  height: 540px;
   max-height: 70vh;
   background: var(--card);
   border-radius: 14px;
@@ -475,16 +475,37 @@ button.button-link {
   margin: 0;
 }
 
-.chat-products {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--border);
+/* Product cards the chat adds under a reply: same cards, smaller. */
+.chat-bubble:has(.chat-cards) {
+  max-width: 100%;
 }
 
-.chat-products a {
-  font-size: 0.85rem;
-  color: var(--blue);
+.chat-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.chat-cards .product-card {
+  border-radius: 8px;
+  font-size: 0.8rem;
+}
+
+.chat-cards .product-card-body {
+  padding: 0.45rem 0.55rem 0.6rem;
+}
+
+.chat-cards .product-card h3 {
+  font-size: 0.82rem;
+  margin-bottom: 0.15rem;
+}
+
+.chat-cards .product-card .price {
+  margin-bottom: 0.2rem;
+}
+
+.chat-cards .product-card .muted {
+  font-size: 0.74rem;
+  line-height: 1.3;
 }

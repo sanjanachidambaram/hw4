@@ -8,23 +8,32 @@ import json
 import re
 import sqlite3
 from contextlib import closing
+from typing import Literal
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from pydantic_ai import RunContext
 
 from models import (
+    CatalogueMatch,
     ProductDetails,
-    ProductLink,
     ProductNotFound,
-    ProductSearchResult,
     SizeStock,
     SizeStockResult,
 )
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "campus_customs.db"
 SIZE_ORDER = {"XS": 0, "S": 1, "M": 2, "L": 3, "XL": 4, "XXL": 5}
-MAX_RESULTS = 10
+# Different words customers use for the same thing, mapped to the word the
+# catalogue uses ("grey" -> "gray", "tee" -> "shirt").
+QUERY_SYNONYMS = {
+    "grey": "gray", "tee": "shirt", "tees": "shirt", "tshirt": "shirt", "tshirts": "shirt",
+    "hoody": "hoodie", "hoodys": "hoodie", "jumper": "sweater",
+    "sweatshirts": "sweatshirt", "quarterzip": "zip", "fleeces": "fleece",
+}
+
+DEFAULT_LIMIT = 6
+MAX_LIMIT = 12
 
 # Ways customers say sizes, mapped to how the database stores them.
 SIZE_ALIASES = {
@@ -38,8 +47,10 @@ SIZE_ALIASES = {
 
 # Words that don't help find a product.
 STOPWORDS = {
-    "a", "an", "and", "any", "do", "for", "have", "i", "in", "is", "it", "me",
-    "of", "on", "or", "show", "some", "the", "with", "you", "your", "yale",
+    "a", "an", "and", "any", "anything", "do", "does", "for", "got", "have", "i",
+    "in", "is", "it", "items", "like", "looking", "me", "of", "on", "or", "please",
+    "sell", "show", "some", "something", "stuff", "that", "the", "what", "with",
+    "you", "your", "yale",
 }
 
 
@@ -48,7 +59,9 @@ class ChatDeps:
     """Per-message info the tools can see."""
 
     first_name: str | None = None  # only the first name, never email or password
-    looked_up: dict[str, ProductLink] = field(default_factory=dict)
+    # Every product id a tool returned during this turn. The AI may only show
+    # cards for these, so it can't invent a product.
+    seen_ids: set[str] = field(default_factory=set)
 
 
 def _read_only_db() -> sqlite3.Connection:
@@ -58,33 +71,63 @@ def _read_only_db() -> sqlite3.Connection:
 
 
 def _remember(ctx: RunContext[ChatDeps], row: sqlite3.Row) -> None:
-    ctx.deps.looked_up[row["product_id"]] = ProductLink(
-        product_id=row["product_id"], name=row["name"], price=row["price"]
-    )
+    ctx.deps.seen_ids.add(row["product_id"])
 
 
-def search_products(
-    ctx: RunContext[ChatDeps], query: str, max_price: float | None = None
-) -> list[ProductSearchResult]:
-    """Search the shop's catalogue by keywords such as product type, color, college, sport, or name.
+def _words(text: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9]+", text.lower()))
+
+
+def _word_matches(word: str, words: set[str]) -> bool:
+    """True if the whole word, or its singular ("hoodies" -> "hoodie"), appears.
+
+    Whole words only, so "shirt" doesn't match inside "sweatshirt".
+    """
+    if word in words:
+        return True
+    if len(word) > 3 and word.endswith("es") and word[:-2] in words:
+        return True
+    return len(word) > 3 and word.endswith("s") and word[:-1] in words
+
+
+def search_catalogue(
+    ctx: RunContext[ChatDeps],
+    query: str,
+    limit: int = DEFAULT_LIMIT,
+    sort: Literal["relevance", "price_low", "price_high"] = "relevance",
+) -> list[CatalogueMatch]:
+    """Search the catalogue by product name, category, description, and colors (capital letters don't matter).
+
+    Every meaningful word in the query must match, so "navy hoodie" finds
+    navy hoodies, not every navy item. Plurals are fine ("hoodies").
 
     Args:
-        query: Keywords to search for, e.g. "navy hoodie", "Saybrook", "fleece".
-        max_price: Optional highest price in US dollars.
+        query: What the customer wants, e.g. "hoodies", "navy crewneck", "Saybrook".
+        limit: Most results to return (1-12, default 6).
+        sort: "relevance" (default), "price_low" (cheapest first), or
+            "price_high" (most expensive first). Use a price sort for
+            "cheapest" / "most expensive" questions, since a search can match
+            more products than the limit returns.
 
     Returns:
-        Up to 10 matching products (id, name, price, whether any size is in
-        stock). An empty list means the shop doesn't carry anything matching.
+        Matching products (id, name, category, colors, price, in_stock), best
+        matches first. This is enough to answer "do you have a gray shirt?"
+        without looking up each product. An empty list means nothing in the
+        catalogue matches. This is not an error.
     """
-    words = [w for w in re.findall(r"[a-z0-9]+", query.lower()) if w not in STOPWORDS]
+    words = [
+        QUERY_SYNONYMS.get(w, w) for w in re.findall(r"[a-z0-9]+", query.lower())
+        if w not in STOPWORDS and len(w) > 1
+    ]
     if not words:
         return []
+    limit = max(1, min(limit, MAX_LIMIT))
 
     with closing(_read_only_db()) as conn:
         rows = conn.execute(
             """
-            SELECT c.product_id, c.name, c.garment_type, c.description, c.colors,
-                   c.search_tags, c.price, COALESCE(SUM(i.quantity), 0) AS total_stock
+            SELECT c.product_id, c.name, c.garment_type, c.description, c.colors, c.price,
+                   COALESCE(SUM(i.quantity), 0) AS total_stock
             FROM catalogue c
             LEFT JOIN inventory i ON i.product_id = c.product_id
             GROUP BY c.product_id
@@ -93,23 +136,34 @@ def search_products(
 
     scored = []
     for row in rows:
-        if max_price is not None and row["price"] > max_price:
+        title_words = _words(f"{row['name']} {row['garment_type']}")
+        color_words = _words(" ".join(json.loads(row["colors"])))
+        all_words = title_words | color_words | _words(row["description"])
+        if not all(_word_matches(w, all_words) for w in words):
             continue
-        haystack = " ".join(
-            [row["name"], row["garment_type"], row["description"], row["colors"], row["search_tags"]]
-        ).lower()
-        score = sum(1 for w in words if w in haystack)
-        if score:
-            scored.append((score, row))
+        # Rank name/category matches highest, then listed colors, then
+        # words that only appear somewhere in the description.
+        score = sum(
+            2 if _word_matches(w, title_words) else 1 if _word_matches(w, color_words) else 0
+            for w in words
+        )
+        scored.append((score, row))
 
-    scored.sort(key=lambda pair: (-pair[0], pair[1]["price"]))
+    if sort == "price_low":
+        scored.sort(key=lambda pair: (pair[1]["price"], pair[1]["name"]))
+    elif sort == "price_high":
+        scored.sort(key=lambda pair: (-pair[1]["price"], pair[1]["name"]))
+    else:
+        scored.sort(key=lambda pair: (-pair[0], pair[1]["name"]))
     results = []
-    for _, row in scored[:MAX_RESULTS]:
+    for _, row in scored[:limit]:
         _remember(ctx, row)
         results.append(
-            ProductSearchResult(
+            CatalogueMatch(
                 product_id=row["product_id"],
                 name=row["name"],
+                category=row["garment_type"],
+                colors=json.loads(row["colors"]),
                 price=row["price"],
                 in_stock=row["total_stock"] > 0,
             )
@@ -138,7 +192,7 @@ def get_product_details(
     """Get one product's description, price, colors, and stock for every size.
 
     Args:
-        product_id: The product_id from search_products, e.g. "basic-hoodie-big-yale".
+        product_id: The product_id from search_catalogue, e.g. "basic-hoodie-big-yale".
 
     Returns:
         The product's details, with stock as a list of sizes and quantities
@@ -170,7 +224,7 @@ def check_size_stock(ctx: RunContext[ChatDeps], product_id: str, size: str) -> S
     """Check whether one specific size of a product is in stock.
 
     Args:
-        product_id: The product_id from search_products.
+        product_id: The product_id from search_catalogue.
         size: The size the customer asked about, e.g. "M", "medium", "XL", "2XL".
 
     Returns:
@@ -204,4 +258,4 @@ def check_size_stock(ctx: RunContext[ChatDeps], product_id: str, size: str) -> S
     )
 
 
-ALL_TOOLS = [search_products, get_product_details, check_size_stock]
+ALL_TOOLS = [search_catalogue, get_product_details, check_size_stock]

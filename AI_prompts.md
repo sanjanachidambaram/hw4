@@ -170,3 +170,29 @@ models.py: Add or update the return types the tools give back. They should be si
 Docs: Add to output/harness.md (don't replace what's already there). List each tool, say what it does, and explain which fields I chose for the lookup results and why, in plain English.
 
 Don't break the existing product pages, login, or chat. When you're done, explain in simple words what each tool does and what each field in the return types means. Then save my work with a git commit called "Problem 6: tools".
+
+## Problem 7: Chat search that updates the page
+
+### Prompt
+
+Okiee onto Prob 7 - Chat search that updates the page.
+
+When a customer asks about a type of item, the agent should go look through the catalogue, and the site should show those matching items as product cards right there on the page (image, name, price, short info).
+
+So first, write a search function over the catalogue data we already have. Hand it to the agent as a tool it can call — something like search_catalogue(query, limit). It should match on name, category and description, and not care about capital letters. If nothing matches, just give back an empty list instead of throwing an error.
+
+When the agent uses that tool, its reply should include two things: the normal chatty text, AND a proper list of the matching products that the code can read. The front end should check that list before trying to draw anything. If it's empty, just show the text reply on its own — no empty grid. If the data comes back weird, same deal: show the text and move on.
+
+One thing to watch: every card still needs to open the single-item detail view (big image + full info) when you click it — including the cards the chat just added. I understand that the trap is that click listeners attached when the page first loads don't apply to cards added later. So make sure this doesn't happen.
+
+BEFORE YOU SAY IT'S DONE, CHECK THESE THINGS
+
+1. Ask for something we sell → the cards show up.
+2. Ask for something we don't sell → just a text reply. No crash.
+3. Click a card → the big detail page opens. Try this on BOTH kinds of card:  the ones already on the page, and the ones the chat just added.
+
+UPDATE: - prompts/prompt.md — write down the tool and exactly what the response looks like; - output/harness.md — write down how search results get from the agent to the page. Both should make the flow obvious to someone reading it cold.
+
+Chat says, "Sorry, that one took me too long to look up. Could you ask it a simpler way?" - can you fix this bug? I'm asking for a gray shirt. Think about what the underlying problem is and fix it.
+
+Yes

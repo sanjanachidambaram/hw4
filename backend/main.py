@@ -32,7 +32,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 import agent
 import auth
-from models import ChatRequest, ChatResponse
+from models import ChatProductCard, ChatRequest, ChatResponse
 
 logger = logging.getLogger("campus_customs")
 
@@ -364,6 +364,45 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
         logger.exception("Chat request failed")
         raise HTTPException(502, "The shop assistant ran into a problem. Please try again.")
 
-    # Link only products the reply actually names, not every search result.
-    mentioned = [p for p in deps.looked_up.values() if p.name.lower() in reply.lower()]
-    return ChatResponse(reply=reply, products=mentioned[:4])
+    cards = build_product_cards(reply.product_ids, allowed_ids=deps.seen_ids)
+    return ChatResponse(reply=reply.reply, products=cards)
+
+
+MAX_CHAT_CARDS = 8
+
+
+def build_product_cards(product_ids: list[str], allowed_ids: set[str]) -> list[ChatProductCard]:
+    """Turn the AI's chosen product ids into real cards from the database.
+
+    Only ids that a tool actually returned this turn are kept, duplicates are
+    dropped, and every detail (name, price, image, stock) comes straight from
+    the database, never from the AI's own text.
+    """
+    wanted = [pid for pid in dict.fromkeys(product_ids) if pid in allowed_ids][:MAX_CHAT_CARDS]
+    if not wanted:
+        return []
+    placeholders = ",".join("?" * len(wanted))
+    with closing(get_db()) as conn:
+        rows = conn.execute(
+            f"""
+            SELECT c.*, COALESCE(SUM(i.quantity), 0) AS total_stock
+            FROM catalogue c
+            LEFT JOIN inventory i ON i.product_id = c.product_id
+            WHERE c.product_id IN ({placeholders})
+            GROUP BY c.product_id
+            """,
+            wanted,
+        ).fetchall()
+    by_id = {r["product_id"]: r for r in rows}
+    return [
+        ChatProductCard(
+            product_id=r["product_id"],
+            name=r["name"],
+            price=r["price"],
+            description=r["description"],
+            image_url=f"/api/images/{r['product_id']}",
+            total_stock=r["total_stock"],
+        )
+        for pid in wanted
+        if (r := by_id.get(pid)) is not None
+    ]

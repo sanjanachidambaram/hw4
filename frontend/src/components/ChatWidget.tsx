@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
-import { ApiError, formatPrice, sendChatMessage } from "../api";
+import { ApiError, sendChatMessage } from "../api";
 import { useAuth } from "../AuthContext";
-import type { ChatReply } from "../types";
+import type { CardProduct } from "../types";
+import ProductCard from "./ProductCard";
 
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
-  products?: ChatReply["products"];
+  products?: CardProduct[];
 }
 
 const MAX_MESSAGE_LENGTH = 1000; // matches the limit in backend/models.py
@@ -75,12 +75,12 @@ export default function ChatWidget() {
               // React renders this as plain text, so a message can't inject HTML.
               <div key={i} className={`chat-bubble ${m.role}`}>
                 {m.content}
+                {/* Only draw the grid if there's at least one checked card. */}
                 {m.products && m.products.length > 0 && (
-                  <div className="chat-products">
+                  <div className="chat-cards">
                     {m.products.map((p) => (
-                      <Link key={p.product_id} to={`/products/${p.product_id}`}>
-                        {p.name} · {formatPrice(p.price)}
-                      </Link>
+                      // Same card as the Products page, so clicking opens the detail page.
+                      <ProductCard key={p.product_id} product={p} />
                     ))}
                   </div>
                 )}

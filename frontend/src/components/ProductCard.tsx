@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { formatPrice, imageUrl } from "../api";
-import type { Product } from "../types";
+import type { CardProduct } from "../types";
 
 const SHORT_DESCRIPTION_LENGTH = 90;
 
@@ -9,7 +9,10 @@ function shorten(text: string): string {
   return text.slice(0, SHORT_DESCRIPTION_LENGTH).trimEnd() + "…";
 }
 
-export default function ProductCard({ product }: { product: Product }) {
+// Each card is a real link (<a href="/products/...">), and React handles its
+// clicks at the page root, so cards added later (e.g. by the chat) open the
+// detail page exactly like cards that were there when the page loaded.
+export default function ProductCard({ product }: { product: CardProduct }) {
   return (
     <Link to={`/products/${product.product_id}`} className="product-card">
       <img src={imageUrl(product)} alt={product.name} loading="lazy" />
