@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ApiError, sendChatMessage } from "../api";
+import { matchPath, useLocation } from "react-router-dom";
+import { ApiError, fetchChatHistory, sendChatMessage, type PageInfo } from "../api";
 import { useAuth } from "../AuthContext";
 import type { CardProduct } from "../types";
 import ProductCard from "./ProductCard";
@@ -18,6 +19,7 @@ const GREETING: ChatMessage = {
 
 export default function ChatWidget() {
   const { user } = useAuth();
+  const location = useLocation();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -28,11 +30,35 @@ export default function ChatWidget() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, open]);
 
-  // Start a fresh conversation when someone logs in or out, so the next
-  // person on this computer doesn't see the previous person's chat.
+  // When someone logs in or out, reset the chat so the next person on this
+  // computer never sees the previous person's messages. A logged-in shopper
+  // then gets their own saved history from the server; a guest starts fresh.
   useEffect(() => {
     setMessages([GREETING]);
+    if (!user) return;
+    let stale = false; // ignore the answer if the user changes again first
+    fetchChatHistory()
+      .then((saved) => {
+        if (stale || saved.length === 0) return;
+        setMessages([
+          GREETING,
+          ...saved.map((m) => ({ role: m.role, content: m.reply, products: m.products })),
+        ]);
+      })
+      .catch(() => {
+        // If history can't load, the chat still works; it just starts fresh.
+      });
+    return () => {
+      stale = true;
+    };
   }, [user]);
+
+  // The page the shopper is on right now, sent with every message so the
+  // assistant knows what "this" means on a product page.
+  function currentPage(): PageInfo {
+    const match = matchPath("/products/:productId", location.pathname);
+    return { path: location.pathname, product_id: match?.params.productId ?? null };
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -43,7 +69,7 @@ export default function ChatWidget() {
     setInput("");
     setSending(true);
     try {
-      const { reply, products } = await sendChatMessage(text);
+      const { reply, products } = await sendChatMessage(text, currentPage());
       setMessages((prev) => [...prev, { role: "assistant", content: reply, products }]);
     } catch (err) {
       const content =

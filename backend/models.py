@@ -10,10 +10,33 @@ MAX_MESSAGE_LENGTH = 1000
 
 # ---------- Chat request / response ----------
 
+class PageInfo(BaseModel):
+    """Which page the shopper is on, sent by the chat box with each message."""
+
+    path: str = Field(default="/", max_length=200)
+    # Only lowercase letters, digits, and hyphens, which is how product ids look.
+    product_id: str | None = Field(default=None, max_length=100, pattern=r"^[a-z0-9-]+$")
+
+
 class ChatRequest(BaseModel):
     """What the chat box sends to POST /api/chat."""
 
     message: str = Field(min_length=1, max_length=MAX_MESSAGE_LENGTH)
+    page: PageInfo | None = None
+
+
+class ChatHistoryMessage(BaseModel):
+    """One saved message, for showing a returning shopper their history."""
+
+    role: Literal["user", "assistant"]
+    content: str
+    products: list["ChatProductCard"] = Field(default_factory=list)
+
+
+class ChatHistoryResponse(BaseModel):
+    """What GET /api/chat/history returns. Always empty for guests."""
+
+    messages: list[ChatHistoryMessage]
 
 
 class ChatProductCard(BaseModel):

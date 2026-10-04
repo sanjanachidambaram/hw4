@@ -15,7 +15,7 @@ from pathlib import Path
 
 from dotenv import dotenv_values
 from openai import AsyncOpenAI
-from pydantic_ai import Agent
+from pydantic_ai import Agent, RunContext
 from pydantic_ai.messages import ModelMessage
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
@@ -75,17 +75,37 @@ def get_agent() -> Agent[ChatDeps, AgentReply]:
     )
 
     @agent.instructions
-    def customer_name(ctx) -> str:
-        if ctx.deps.first_name:
-            return f"The customer is logged in. Their first name is {ctx.deps.first_name}."
-        return "The customer is not logged in."
+    def customer_info(ctx: RunContext[ChatDeps]) -> str:
+        """Who is chatting. Re-read from deps on every message, so it's always current."""
+        c = ctx.deps.customer
+        if c is None:
+            return "## Customer\nguest (not logged in). No personal info."
+        return (
+            "## Customer\n"
+            f"Logged in. First name: {c.first_name}. Last name: {c.last_name}. Email: {c.email}."
+        )
+
+    @agent.instructions
+    def page_info(ctx: RunContext[ChatDeps]) -> str:
+        """Which page the shopper is on when they send the message."""
+        p = ctx.deps.page
+        if p is None:
+            return "## Current page\nUnknown."
+        if p.product_id:
+            return (
+                "## Current page\n"
+                f'The customer is viewing the product page for "{p.product_name}" '
+                f"(product_id: {p.product_id})."
+            )
+        return f"## Current page\nThe customer is on the {p.page} page (not a single product)."
 
     return agent
 
 
-# ---------- Conversation memory ----------
-# Kept in server memory (resets when the server restarts), keyed by a random
-# id stored in the visitor's signed session cookie. Each entry is a list of
+# ---------- Guest conversation memory ----------
+# Guests' chats are kept in server memory only (never saved; reset when the
+# server restarts), keyed by a random id in the visitor's signed session
+# cookie. Logged-in shoppers' chats are saved in the database (history.py). Each entry is a list of
 # turns; each turn is the complete set of messages from one question+answer,
 # so trimming never splits a tool call from its result.
 
@@ -106,18 +126,20 @@ def save_turn(chat_id: str, new_messages: list[ModelMessage]) -> None:
         _conversations.popitem(last=False)
 
 
-async def ask(message: str, chat_id: str, first_name: str | None) -> tuple[AgentReply, ChatDeps]:
+async def ask(
+    message: str, deps: ChatDeps, history: list[ModelMessage]
+) -> tuple[AgentReply, list[ModelMessage]]:
     """Send one customer message to the agent and return its reply.
 
-    Returns the AI's AgentReply (text + product_ids) and the deps, whose
-    seen_ids lists every product a tool actually returned this turn.
+    `deps` carries the customer and page info (and collects seen_ids).
+    `history` is the earlier conversation: from the database for logged-in
+    shoppers, or from memory for guests. Returns the AI's AgentReply
+    (text + product_ids) and this turn's new messages.
     """
-    deps = ChatDeps(first_name=first_name)
     result = await get_agent().run(
         message,
         deps=deps,
-        message_history=get_history(chat_id),
+        message_history=history,
         usage_limits=USAGE_LIMITS,
     )
-    save_turn(chat_id, result.new_messages())
-    return result.output, deps
+    return result.output, result.new_messages()

@@ -378,3 +378,61 @@ AI messages used for Problem 7: **4**.
 | After | 2 | 1 | ✅ "Yep! We have several gray and heather gray shirts, including the 2025 Yale Vs Harvard T Shirt, Boola Boola T Shirt, and District Tri Blend T Shirt Vintage Shield, all $32.00." + 3 cards (4,708 input tokens) |
 
 AI messages used for this fix: 2 (one traced diagnosis with the limits loosened, one re-test).
+
+---
+
+# Customer memory (Problem 8)
+
+## How chat history is stored
+
+**Table:** the database already had a good table, `chat_messages`, so I used it as is. No columns were changed and no existing rows were touched.
+
+| Column | What goes in it |
+|---|---|
+| `id` | Auto-number; also keeps messages in order |
+| `user_id` | Whose message this is (links to `users.id`) |
+| `role` | `user` (the shopper) or `assistant` (the bot) |
+| `content` | The message text |
+| `products_json` | For bot replies: which product cards were shown, e.g. `[{"product_id": "saybrook-logo-t-shirt"}]` |
+| `created_at` | When it was sent (filled in automatically) |
+
+- **Logged-in shoppers:** after each successful answer, `backend/history.py` saves the question and the reply **together**, so there's never half a conversation. When they come back (after a server restart, or after logging out and in), the chat box calls `GET /api/chat/history` and shows their last 50 messages. The AI is given their last 12 messages (6 back-and-forths) as context. Product cards in old messages are rebuilt from the database, so prices and stock are always current.
+- **Guests:** they can chat normally, but nothing goes into the database. Their conversation is kept only in server memory and is gone when the server restarts.
+- **Never mixing up users:** every query in `history.py` includes `WHERE user_id = ?`, and that `user_id` always comes from the **signed login cookie**, never from anything the browser sends. Someone can't ask for another person's history even by editing their request. Logging out clears the chat on screen, so the next person on the same computer starts fresh.
+- **Works on another computer:** when the backend starts, it runs `CREATE TABLE IF NOT EXISTS chat_messages (…)` with the same structure as the original. On a fresh database the table is created; on ours nothing changes. It also adds an index on `(user_id, id)` so loading one person's history stays fast.
+- **Not saved:** messages blocked by the AI provider's safety filter, and messages where something went wrong.
+
+## Which customer fields the agent can see
+
+Using PydanticAI's **deps** pattern (the "backpack"): every message, the backend packs a `ChatDeps` object and passes it with `agent.run(..., deps=deps)`. The agent's instruction functions read it as `ctx.deps`. This follows the current PydanticAI docs: a dataclass declared as `deps_type`, read through `RunContext`.
+
+| Shopper | What the agent is told |
+|---|---|
+| Logged in | `Logged in. First name: Test. Last name: User. Email: test@campuscustoms.yale.edu.` |
+| Guest | `guest (not logged in). No personal info.` |
+
+- The backend reads **only** `first_name`, `last_name`, and `email` from the `users` table (`SELECT first_name, last_name, email …`). The password hash is never even loaded, so it can't reach the AI. I checked this by capturing the exact instructions the AI receives and searching them for every stored hash: none were found.
+- The instructions tell the agent to greet people by first name, only mention their email if they ask about their account, and never ask guests for personal info.
+
+## How page context gets passed
+
+1. The chat box (`ChatWidget.tsx`) looks at the current page address. If it matches `/products/<id>`, it sends that id along with the message:
+   `{"message": "do you have this in pink?", "page": {"path": "/products/basic-hoodie-big-yale", "product_id": "basic-hoodie-big-yale"}}`
+2. The backend checks it (`models.PageInfo`): the path is at most 200 characters, and the product id may only contain lowercase letters, digits, and hyphens.
+3. `main.page_context()` **looks the id up in the catalogue**. If it exists, the agent is told the product's real name from the database. If not, it's ignored. Other pages become a simple name (home, products, about, …). The raw text the browser sent never reaches the AI.
+4. The agent is told, for example: `The customer is viewing the product page for "Basic Hoodie Big Yale" (product_id: basic-hoodie-big-yale).`
+5. `prompt.md` says "this", "it", and "this item" mean that product, **but the answer must still come from a tool**. So it calls `get_product_details("basic-hoodie-big-yale")` and answers from the real color list.
+
+## Test results (compared against the database)
+
+Starting point: `chat_messages` had 22 rows (user 1, Test User: 6; user 3, Tauhid: 16).
+
+| Test | What happened | Database |
+|---|---|---|
+| **1. Logged-in history survives a restart** | Logged in as test@campuscustoms.yale.edu. The chat loaded the 6 earlier messages. Asked "Hi! Do you have any Saybrook gear?" → "Hi, Test! Yes—we have Saybrook gear: a crewneck sweatshirt for $58, a logo T-shirt for $32, and a sweater fleece jacket for $98…" + 3 cards. **Restarted the backend** and reloaded: all 8 messages and the 3 cards were still there. Then asked "Which of those Saybrook items was the cheapest?" → "The Saybrook Logo T Shirt was the cheapest at $32." (it remembered across the restart) | ✅ New rows 23 and 24 saved under `user_id = 1`, `products_json` listing the 3 Saybrook ids. User 1 went from 6 to 8 rows (10 after the follow-up). Tauhid stayed at 16 |
+| **2. Guests chat but nothing is saved** | Logged out → chat reset to just the greeting. `GET /api/chat/history` returned `{"messages": []}`. Asked "Do you have any fleece jackets?" → "Yep! We have several fleece jackets… They're all $98…" + 6 cards | ✅ Total stayed at 26 before and after. 0 rows contain the guest's question. All 6 fleeces are $98 in the catalogue |
+| **3. "this" on a product page** | On the Basic Hoodie Big Yale page, asked "do you have this in pink?". The chat sent `product_id: basic-hoodie-big-yale`. Reply: "Sorry, the Basic Hoodie Big Yale doesn't come in pink. It's available in navy blue and white." + its card | ✅ Catalogue colors are `["navy blue", "white"]`, and no product in the catalogue comes in pink |
+
+AI messages used for Problem 8 testing: **4**. All other checks (history isolation, fresh-database table creation, malformed saved data, the exact text the AI receives) ran offline for free.
+
+**Note:** the 4 test messages (rows 23–26) are now part of Test User's real history. They're harmless, but tell me if you'd like them deleted.

@@ -50,9 +50,35 @@ export function imageUrl(product: Pick<Product, "image_url">): string {
   return `${API_BASE}${product.image_url}`;
 }
 
-export async function sendChatMessage(message: string): Promise<ChatReply> {
-  const data = await post<unknown>("/api/chat", { message });
+/** Which page the shopper is on. Sent with each chat message. */
+export interface PageInfo {
+  path: string;
+  product_id: string | null;
+}
+
+export async function sendChatMessage(message: string, page: PageInfo): Promise<ChatReply> {
+  const data = await post<unknown>("/api/chat", { message, page });
   return parseChatReply(data);
+}
+
+export interface SavedChatMessage extends ChatReply {
+  role: "user" | "assistant";
+}
+
+/**
+ * The logged-in shopper's saved chat (empty for guests). Checked the same
+ * way as live replies: anything malformed is skipped, never drawn.
+ */
+export async function fetchChatHistory(): Promise<SavedChatMessage[]> {
+  const data = await request<unknown>("/api/chat/history");
+  const list = (data as { messages?: unknown })?.messages;
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((item): SavedChatMessage[] => {
+    const m = item as { role?: unknown; content?: unknown; products?: unknown };
+    if ((m.role !== "user" && m.role !== "assistant") || typeof m.content !== "string") return [];
+    const products = Array.isArray(m.products) ? m.products.filter(isCardProduct) : [];
+    return [{ role: m.role, reply: m.content, products }];
+  });
 }
 
 /** True if the value looks like one usable product card. */

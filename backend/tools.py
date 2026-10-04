@@ -55,10 +55,33 @@ STOPWORDS = {
 
 
 @dataclass
-class ChatDeps:
-    """Per-message info the tools can see."""
+class Customer:
+    """Who is chatting. Only these three fields; never a password or hash."""
 
-    first_name: str | None = None  # only the first name, never email or password
+    first_name: str
+    last_name: str
+    email: str
+
+
+@dataclass
+class PageContext:
+    """Where the shopper is on the site when they send the message."""
+
+    page: str  # "home", "products", "product", "about", "login", "signup", or "other"
+    product_id: str | None = None  # set only on a product page, and only if it exists
+    product_name: str | None = None  # read from the database, not from the browser
+
+
+@dataclass
+class ChatDeps:
+    """The agent's "backpack": per-message info its tools and instructions can see.
+
+    Passed to agent.run(deps=...) and read as ctx.deps (PydanticAI's
+    dependency pattern).
+    """
+
+    customer: Customer | None = None  # None means a guest
+    page: PageContext | None = None
     # Every product id a tool returned during this turn. The AI may only show
     # cards for these, so it can't invent a product.
     seen_ids: set[str] = field(default_factory=set)

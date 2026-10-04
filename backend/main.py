@@ -8,7 +8,10 @@ Safety notes:
 - Product endpoints open the database READ-ONLY. Only account creation
   opens it for writing, and only to insert into the `users` table.
 - Emails and password hashes are never sent to the browser. /api/auth/me
-  returns only the logged-in user's first and last name.
+  returns only the logged-in user's first and last name. The chat agent
+  gets first name, last name, and email, never the password hash.
+- Saved chat history is always filtered by the user_id from the signed
+  login cookie, so shoppers only ever see their own messages.
 - Images are looked up by product_id through the database, never by a raw
   file path from the request, so a visitor can't ask for arbitrary files.
 - See auth.py and output/harness.md for how passwords are protected.
@@ -32,7 +35,16 @@ from starlette.middleware.sessions import SessionMiddleware
 
 import agent
 import auth
-from models import ChatProductCard, ChatRequest, ChatResponse
+import history as chat_history
+from models import (
+    ChatHistoryMessage,
+    ChatHistoryResponse,
+    ChatProductCard,
+    ChatRequest,
+    ChatResponse,
+    PageInfo,
+)
+from tools import ChatDeps, Customer, PageContext
 
 logger = logging.getLogger("campus_customs")
 
@@ -65,6 +77,10 @@ signup_limiter_ip = auth.RateLimiter(max_attempts=5, window_seconds=60 * 60)
 # Hide the auto-generated API docs pages, which would map out every endpoint
 # for an attacker.
 app = FastAPI(title="Campus Customs API", docs_url=None, redoc_url=None, openapi_url=None)
+
+# Make sure the chat history table exists (e.g. on a computer with a fresh
+# database). Safe to run every time; it never changes existing data.
+chat_history.ensure_chat_table()
 
 
 @app.middleware("http")
@@ -318,6 +334,50 @@ def me(request: Request) -> dict:
 # Every AI message costs money, so cap how fast one visitor can send them.
 chat_limiter_ip = auth.RateLimiter(max_attempts=20, window_seconds=10 * 60)
 
+# Map site paths to simple page names. Only these names reach the AI, never
+# the raw path the browser sent.
+PAGE_NAMES = {"/": "home", "/products": "products", "/about": "about",
+              "/login": "login", "/signup": "signup"}
+
+FILTERED_REPLY = "Sorry, I can't help with that. I'm here to help with Campus Customs products, prices, and sizes!"
+
+
+def current_customer(request: Request) -> tuple[int | None, Customer | None]:
+    """The logged-in user's id and name/email from the signed cookie, or (None, None) for a guest.
+
+    Only first name, last name, and email are read. The password hash is never selected.
+    """
+    user_id = request.session.get("user_id")
+    if user_id is None:
+        return None, None
+    with closing(get_db()) as conn:
+        row = conn.execute(
+            "SELECT first_name, last_name, email FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+    if row is None:
+        return None, None
+    return user_id, Customer(
+        first_name=row["first_name"] or "", last_name=row["last_name"] or "", email=row["email"]
+    )
+
+
+def page_context(page: PageInfo | None) -> PageContext | None:
+    """Turn the browser's page info into trusted context for the agent.
+
+    The product id is checked against the catalogue, and the product name is
+    read from the database, so nothing the browser sends is passed through as-is.
+    """
+    if page is None:
+        return None
+    if page.product_id:
+        with closing(get_db()) as conn:
+            row = conn.execute(
+                "SELECT product_id, name FROM catalogue WHERE product_id = ?", (page.product_id,)
+            ).fetchone()
+        if row:
+            return PageContext(page="product", product_id=row["product_id"], product_name=row["name"])
+    return PageContext(page=PAGE_NAMES.get(page.path, "other"))
+
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(body: ChatRequest, request: Request) -> ChatResponse:
@@ -327,23 +387,23 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
         raise HTTPException(429, "You're sending messages quickly. Please wait a few minutes.")
     chat_limiter_ip.record(ip)
 
-    # A random id in the signed session cookie ties messages into one
-    # conversation. Logging out clears it, so the next person starts fresh.
-    chat_id = request.session.get("chat_id")
-    if not chat_id:
-        chat_id = secrets.token_urlsafe(16)
-        request.session["chat_id"] = chat_id
+    user_id, customer = current_customer(request)
+    deps = ChatDeps(customer=customer, page=page_context(body.page))
 
-    # Only the first name is passed to the AI, never email or password hash.
-    first_name = None
-    user_id = request.session.get("user_id")
+    # Logged in: earlier conversation comes from the database (survives
+    # restarts and logouts). Guest: from server memory only, never saved.
+    chat_id = None
     if user_id is not None:
-        with closing(get_db()) as conn:
-            row = conn.execute("SELECT first_name FROM users WHERE id = ?", (user_id,)).fetchone()
-        first_name = row["first_name"] if row else None
+        history = chat_history.as_agent_history(user_id)
+    else:
+        chat_id = request.session.get("chat_id")
+        if not chat_id:
+            chat_id = secrets.token_urlsafe(16)
+            request.session["chat_id"] = chat_id
+        history = agent.get_history(chat_id)
 
     try:
-        reply, deps = await agent.ask(body.message, chat_id, first_name)
+        reply, new_messages = await agent.ask(body.message, deps, history)
     except agent.ChatUnavailable:
         logger.error("Chat is not configured: PORTKEY_API_KEY is missing.")
         raise HTTPException(503, "The shop assistant isn't available right now.")
@@ -351,12 +411,11 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
         return ChatResponse(reply="Sorry, that one took me too long to look up. Could you ask it a simpler way?")
     except ModelHTTPError as exc:
         # The AI provider's safety filter blocks messages that look like attempts
-        # to break the assistant's rules. Treat that as a polite refusal.
+        # to break the assistant's rules. Treat that as a polite refusal, and
+        # don't save it (it could trip the filter again on later messages).
         if "content_filter" in str(exc.body):
             logger.warning("Chat message blocked by the provider's content filter.")
-            return ChatResponse(
-                reply="Sorry, I can't help with that. I'm here to help with Campus Customs products, prices, and sizes!"
-            )
+            return ChatResponse(reply=FILTERED_REPLY)
         logger.exception("Chat request failed")
         raise HTTPException(502, "The shop assistant ran into a problem. Please try again.")
     except Exception:
@@ -365,7 +424,30 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
         raise HTTPException(502, "The shop assistant ran into a problem. Please try again.")
 
     cards = build_product_cards(reply.product_ids, allowed_ids=deps.seen_ids)
+    if user_id is not None:
+        chat_history.save_exchange(user_id, body.message, reply.reply, [c.product_id for c in cards])
+    else:
+        agent.save_turn(chat_id, new_messages)
     return ChatResponse(reply=reply.reply, products=cards)
+
+
+@app.get("/api/chat/history", response_model=ChatHistoryResponse)
+def get_chat_history(request: Request) -> ChatHistoryResponse:
+    """The logged-in shopper's own saved messages. Guests always get an empty list."""
+    user_id, _ = current_customer(request)
+    if user_id is None:
+        return ChatHistoryResponse(messages=[])
+    messages = []
+    for row in chat_history.load_recent(user_id, chat_history.DISPLAY_MESSAGES):
+        ids = chat_history.product_ids_from_json(row["products_json"])
+        messages.append(
+            ChatHistoryMessage(
+                role=row["role"],
+                content=row["content"],
+                products=load_product_cards(ids) if row["role"] == "assistant" else [],
+            )
+        )
+    return ChatHistoryResponse(messages=messages)
 
 
 MAX_CHAT_CARDS = 8
@@ -374,11 +456,18 @@ MAX_CHAT_CARDS = 8
 def build_product_cards(product_ids: list[str], allowed_ids: set[str]) -> list[ChatProductCard]:
     """Turn the AI's chosen product ids into real cards from the database.
 
-    Only ids that a tool actually returned this turn are kept, duplicates are
-    dropped, and every detail (name, price, image, stock) comes straight from
-    the database, never from the AI's own text.
+    Only ids that a tool actually returned this turn are kept, so the AI
+    can't invent a product.
     """
-    wanted = [pid for pid in dict.fromkeys(product_ids) if pid in allowed_ids][:MAX_CHAT_CARDS]
+    return load_product_cards([pid for pid in product_ids if pid in allowed_ids])
+
+
+def load_product_cards(product_ids: list[str]) -> list[ChatProductCard]:
+    """Fresh card details (name, price, image, stock) straight from the database.
+
+    Duplicates are dropped, unknown ids are skipped, and at most 8 are returned.
+    """
+    wanted = list(dict.fromkeys(product_ids))[:MAX_CHAT_CARDS]
     if not wanted:
         return []
     placeholders = ",".join("?" * len(wanted))

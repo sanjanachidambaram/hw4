@@ -196,3 +196,44 @@ UPDATE: - prompts/prompt.md — write down the tool and exactly what the respons
 Chat says, "Sorry, that one took me too long to look up. Could you ask it a simpler way?" - can you fix this bug? I'm asking for a gray shirt. Think about what the underlying problem is and fix it.
 
 Yes
+
+## Problem 8: Campus Customs Shop + Chatbot
+
+### Prompt
+
+Onto Prob 8: Campus Customs Shop + Chatbot.
+
+I want my chatbot to remember people and what they asked for.
+
+Chat history (logged-in shoppers):
+- When someone is logged in, save their chat messages in the database and load them back when they return, even after the server restarts or they log out and back in.
+- First look at the database and tell me if there's already a good table for this. If there is, use it. If not, make one. Don't break the existing tables.
+- Each person must only ever see their OWN history. Never mix up two users.
+- Create the table in the code if it's missing, so the project still works on another computer where the database file isn't included.
+
+Guests:
+- People who aren't logged in can still chat. Their history does NOT need to be saved.
+
+Who is chatting:
+- When someone is logged in, the agent should know their first name, last name, and email. Pass this to the agent using agent deps (the "backpack" pattern in PydanticAI). Check the current PydanticAI docs for how deps work, since the library changes a lot.
+- NEVER give the agent a password or a password hash.
+- A guest should just show up as "guest" with no personal info.
+
+Page context:
+- When the shopper is on a product page and asks something like "do you have this in pink?", the agent should know which product they mean.
+- Make the chat widget send the current page info with each message (for example, the product ID if they're on a product page). The backend should pass it to the agent along with the user info.
+- The agent should use this to know what "this" or "it" means, and still use the database tools for the real answer. It should never guess.
+
+prompt.md: Add a short note telling the agent about the customer info and page context it gets, and how to use them (like greeting someone by first name, and treating "this item" as the product page they're on). Keep my existing rules and the friendly campus-store voice.
+
+Docs: Add to output/harness.md (don't replace what's already there). Explain in plain English: how user chat history is stored, which customer fields the agent can see, and how page context gets passed.
+
+Testing:
+1. Log in as the test user, send a message, restart the backend, and check that the history is still there.
+2. Chat as a guest and check that it works but nothing is saved.
+3. Open a product page and ask "do you have this in pink?" and check that it knows which product I mean.
+Show me the results and compare to the database.
+
+Don't break the existing product pages, login, or chat. When you're done, explain in simple words how it all works. Then save my work with a git commit called "Problem 8: customer memory".
+
+Also, hope you're continuing to log the prompts in prompts/md
