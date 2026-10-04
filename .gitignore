@@ -1,0 +1,18 @@
+# Installed dependencies (recreated by npm install / pip install)
+node_modules/
+.venv/
+__pycache__/
+
+# Build output
+frontend/dist/
+
+# Secrets: never commit API keys
+.env
+.env.*
+!.env.example
+
+# The database contains user emails and password hashes; keep it out of public repos
+data/*.db
+
+# Product photos (provided with the assignment; not ours to publish)
+data/products/
