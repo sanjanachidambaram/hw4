@@ -144,3 +144,29 @@ Please do a quick check of my project. Don't change any code unless something is
 5. If everything is fine, save my work with a git commit.
 
 When you're done, give me a short checklist in plain English: what's good and what's not.
+
+## Problem 6: Tools: product info and stock
+
+### Prompt
+
+Cool. Time for Problem 6, Tools: product info and stock. I want to make sure my chatbot's tools can look up real information from campus_customs.db. You already built some tools in the last problem, so start by looking at what we have. Don't rebuild from scratch.
+
+Tools: The agent needs to be able to look up three things from the database:
+- A product's description
+- A product's price
+- How many are in stock, by size when the customer asks
+
+Keep the tools small and read-only (they can never change the database). If what we already have covers all three, tell me and only change what's needed. If something is missing, add it.
+
+Rules for the agent:
+- It must use the database for every price, description, and stock answer. It should never make up a price or a quantity.
+- If a size is out of stock, it should say so clearly (for example, "Sorry, size XS is sold out").
+- If a size doesn't exist for that product, or the product isn't found, it should say so instead of guessing.
+
+prompt.md: Add to the instructions so the agent knows when to use its tools. Price, description, and stock questions should always use a tool and never an answer from memory. Include how to word the out-of-stock and not-found answers. Keep my existing rules and the friendly campus-store voice.
+
+models.py: Add or update the return types the tools give back. They should be simple and clear, with the product's name, price, and description, and stock as a list of sizes with a quantity for each. Only include fields the agent actually needs.
+
+Docs: Add to output/harness.md (don't replace what's already there). List each tool, say what it does, and explain which fields I chose for the lookup results and why, in plain English.
+
+Don't break the existing product pages, login, or chat. When you're done, explain in simple words what each tool does and what each field in the return types means. Then save my work with a git commit called "Problem 6: tools".
