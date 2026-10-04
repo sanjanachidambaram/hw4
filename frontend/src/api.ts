@@ -111,6 +111,60 @@ export function parseChatReply(data: unknown): ChatReply {
   return { reply, products };
 }
 
+// ---------- Favorites (logged-in shoppers only) ----------
+
+export interface FavoritesData {
+  product_ids: string[];
+  products: CardProduct[];
+}
+
+export async function fetchFavorites(): Promise<FavoritesData> {
+  const data = await request<{ product_ids?: unknown; products?: unknown }>("/api/favorites");
+  return {
+    product_ids: Array.isArray(data.product_ids)
+      ? data.product_ids.filter((id): id is string => typeof id === "string")
+      : [],
+    products: Array.isArray(data.products) ? data.products.filter(isCardProduct) : [],
+  };
+}
+
+export function addFavorite(productId: string): Promise<unknown> {
+  return post(`/api/favorites/${encodeURIComponent(productId)}`, {});
+}
+
+export function removeFavorite(productId: string): Promise<unknown> {
+  return request(`/api/favorites/${encodeURIComponent(productId)}`, { method: "DELETE" });
+}
+
+// ---------- "Find your fit" quiz (no AI) ----------
+
+export interface QuizItem {
+  kind: string;
+  color: string | null;
+  budget: string;
+}
+
+export interface QuizOptions {
+  kinds: string[];
+  colors: string[];
+  budgets: string[];
+  items: QuizItem[];
+}
+
+export function fetchQuizOptions(): Promise<QuizOptions> {
+  return request<QuizOptions>("/api/quiz/options");
+}
+
+export async function fetchQuizResults(answers: {
+  kind: string;
+  color: string;
+  budget: string;
+}): Promise<CardProduct[]> {
+  const params = new URLSearchParams(answers);
+  const data = await request<{ products?: unknown }>(`/api/quiz/results?${params}`);
+  return Array.isArray(data.products) ? data.products.filter(isCardProduct) : [];
+}
+
 // ---------- Accounts ----------
 
 export interface SignupData {

@@ -126,3 +126,43 @@ class SizeStockResult(BaseModel):
     quantity: int = Field(description="Units of that size in stock (0 unless status is in_stock).")
     sizes_offered: list[str] = Field(description="All sizes this product comes in.")
     sizes_in_stock: list[str] = Field(description="Sizes with at least 1 unit available right now.")
+
+
+class SimilarItem(BaseModel):
+    """One in-stock alternative from find_similar_products."""
+
+    product_id: str
+    name: str
+    price: float = Field(description="Price in US dollars.")
+    colors: list[str]
+    reason: str = Field(description="Short, factual reason it's similar, built from the data.")
+
+
+class SimilarItemsResult(BaseModel):
+    """Alternatives to one product. `items` is empty if nothing similar is in stock."""
+
+    for_product_id: str
+    for_product_name: str
+    size: str | None = Field(description="The size the alternatives were checked for, if any.")
+    items: list[SimilarItem]
+
+
+class ComparedProduct(BaseModel):
+    """One product's facts, for a side-by-side comparison."""
+
+    product_id: str
+    name: str
+    kind: str = Field(description="Broad kind of item, e.g. 'Hoodies'.")
+    price: float = Field(description="Price in US dollars.")
+    description: str
+    colors: list[str]
+    sizes_in_stock: list[str]
+    sizes_sold_out: list[str]
+
+
+class ComparisonResult(BaseModel):
+    """Side-by-side facts for 2-3 products, plus any ids that weren't found."""
+
+    products: list[ComparedProduct]
+    not_found: list[str] = Field(description="Requested product_ids that don't exist.")
+    note: str | None = Field(default=None, description="Set if the request couldn't be fully handled.")

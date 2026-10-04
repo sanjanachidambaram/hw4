@@ -14,10 +14,15 @@ from pathlib import Path
 
 from pydantic_ai import RunContext
 
+import catalog
 from models import (
     CatalogueMatch,
+    ComparedProduct,
+    ComparisonResult,
     ProductDetails,
     ProductNotFound,
+    SimilarItem,
+    SimilarItemsResult,
     SizeStock,
     SizeStockResult,
 )
@@ -281,4 +286,148 @@ def check_size_stock(ctx: RunContext[ChatDeps], product_id: str, size: str) -> S
     )
 
 
-ALL_TOOLS = [search_catalogue, get_product_details, check_size_stock]
+MAX_SIMILAR = 4
+
+
+def _stock_by_product(conn: sqlite3.Connection) -> dict[str, dict[str, int]]:
+    stock: dict[str, dict[str, int]] = {}
+    for r in conn.execute("SELECT product_id, size, quantity FROM inventory"):
+        stock.setdefault(r["product_id"], {})[r["size"]] = r["quantity"]
+    return stock
+
+
+def find_similar_products(
+    ctx: RunContext[ChatDeps], product_id: str, size: str | None = None
+) -> SimilarItemsResult | ProductNotFound:
+    """Find up to 4 in-stock alternatives to a product: same kind of item, close price, shared colors.
+
+    Use for "anything like this?", "something similar?", or when the product
+    (or the size the customer wants) is sold out.
+
+    Args:
+        product_id: The product to find alternatives for.
+        size: Optional size the customer needs (e.g. "M"). If given, only
+            alternatives with that size in stock are returned.
+
+    Returns:
+        Alternatives with name, price, colors, and a short factual reason.
+        `items` is empty if nothing similar is in stock. Returns
+        ProductNotFound if the product id doesn't exist.
+    """
+    wanted_size = normalize_size(size) if size else None
+    with closing(_read_only_db()) as conn:
+        base = conn.execute("SELECT * FROM catalogue WHERE product_id = ?", (product_id,)).fetchone()
+        if base is None:
+            return ProductNotFound(product_id=product_id, message=f"No product with id '{product_id}'.")
+        rows = conn.execute("SELECT * FROM catalogue WHERE product_id != ?", (product_id,)).fetchall()
+        stock = _stock_by_product(conn)
+
+    base_kind = catalog.category_of(base["garment_type"])
+    base_colors = json.loads(base["colors"])
+    # The garment's main color is listed first; the rest are usually logo colors.
+    base_main = catalog.color_family(base_colors[0]) if base_colors else None
+
+    scored = []
+    for row in rows:
+        sizes = stock.get(row["product_id"], {})
+        in_stock = sizes.get(wanted_size, 0) > 0 if wanted_size else any(q > 0 for q in sizes.values())
+        if not in_stock:
+            continue  # only suggest things the customer can actually buy
+        kind = catalog.category_of(row["garment_type"])
+        colors = json.loads(row["colors"])
+        same_main_color = bool(colors) and base_main is not None and (
+            catalog.color_family(colors[0]) == base_main
+        )
+        price_gap = abs(row["price"] - base["price"])
+
+        reasons = []
+        if kind == base_kind:
+            reasons.append(f"also {catalog.SINGULAR[kind]}")
+        if price_gap == 0:
+            reasons.append("same price")
+        elif price_gap <= 15:
+            reasons.append(f"${price_gap:.0f} {'more' if row['price'] > base['price'] else 'less'}")
+        if same_main_color:
+            reasons.append(f"also {colors[0]}")
+        if wanted_size:
+            reasons.append(f"size {wanted_size} in stock")
+
+        # Same kind matters most, then a close price, then the same main color.
+        score = (3 if kind == base_kind else 0) + (2 if price_gap <= 15 else 0) + (1 if same_main_color else 0)
+        if score >= 3:  # must at least be the same kind, or close in price and color
+            scored.append((score, price_gap, row, "; ".join(reasons)))
+
+    scored.sort(key=lambda t: (-t[0], t[1], t[2]["name"]))
+    items = []
+    for _, _, row, reason in scored[:MAX_SIMILAR]:
+        _remember(ctx, row)
+        items.append(
+            SimilarItem(
+                product_id=row["product_id"],
+                name=row["name"],
+                price=row["price"],
+                colors=json.loads(row["colors"]),
+                reason=reason,
+            )
+        )
+    _remember(ctx, base)
+    return SimilarItemsResult(
+        for_product_id=base["product_id"],
+        for_product_name=base["name"],
+        size=wanted_size,
+        items=items,
+    )
+
+
+def compare_products(ctx: RunContext[ChatDeps], product_ids: list[str]) -> ComparisonResult:
+    """Line up 2 or 3 products side by side: name, kind, price, description, colors, sizes in stock and sold out.
+
+    Use for "what's the difference between X and Y?", "compare these", or
+    "which is cheaper?". This returns facts only; explain the differences
+    yourself without adding anything that isn't here.
+
+    Args:
+        product_ids: 2 or 3 product ids (get them from search_catalogue first).
+
+    Returns:
+        The products that were found, plus `not_found` listing any ids that
+        don't exist. `note` explains if fewer than 2 or more than 3 were given.
+    """
+    ids = list(dict.fromkeys(product_ids))
+    note = None
+    if len(ids) > 3:
+        note = "Only the first 3 products were compared."
+        ids = ids[:3]
+    elif len(ids) < 2:
+        note = "Comparing needs at least 2 different products."
+
+    found, not_found = [], []
+    with closing(_read_only_db()) as conn:
+        for pid in ids:
+            row, stock = _load_product(conn, pid)
+            if row is None:
+                not_found.append(pid)
+                continue
+            _remember(ctx, row)
+            found.append(
+                ComparedProduct(
+                    product_id=row["product_id"],
+                    name=row["name"],
+                    kind=catalog.category_of(row["garment_type"]),
+                    price=row["price"],
+                    description=row["description"],
+                    colors=json.loads(row["colors"]),
+                    sizes_in_stock=[s.size for s in stock if s.quantity > 0],
+                    sizes_sold_out=[s.size for s in stock if s.quantity == 0],
+                )
+            )
+    return ComparisonResult(products=found, not_found=not_found, note=note)
+
+
+ALL_TOOLS = [
+    search_catalogue,
+    get_product_details,
+    check_size_stock,
+    find_similar_products,
+    compare_products,
+]

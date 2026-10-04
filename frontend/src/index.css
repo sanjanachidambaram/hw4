@@ -170,13 +170,18 @@ h3 {
 }
 
 .product-card {
+  position: relative;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.product-card-link {
+  display: block;
   text-decoration: none;
   color: inherit;
-  transition: transform 0.15s, box-shadow 0.15s;
 }
 
 .product-card:hover {
@@ -508,4 +513,165 @@ button.button-link {
 .chat-cards .product-card .muted {
   font-size: 0.74rem;
   line-height: 1.3;
+}
+
+/* Favorites heart */
+.heart-button {
+  border: none;
+  background: #fff;
+  color: var(--blue);
+  font-size: 1.35rem;
+  line-height: 1;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+
+.heart-button.saved {
+  color: #c8102e;
+}
+
+.heart-button:hover {
+  transform: scale(1.08);
+}
+
+.card-heart {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+}
+
+.chat-cards .card-heart {
+  width: 1.8rem;
+  height: 1.8rem;
+  font-size: 1.05rem;
+  top: 0.3rem;
+  right: 0.3rem;
+}
+
+.price-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.toast {
+  position: fixed;
+  left: 1.5rem;
+  bottom: 1.5rem;
+  z-index: 60;
+  background: var(--navy);
+  color: #fff;
+  padding: 0.8rem 1rem;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  max-width: 420px;
+}
+
+.toast a {
+  color: #fff;
+  font-weight: 700;
+}
+
+.toast button {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.empty-state {
+  background: var(--card);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+  margin: 1rem 0;
+}
+
+/* Quiz */
+.quiz {
+  max-width: 900px;
+}
+
+.quiz-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.75rem;
+}
+
+.quiz-card h2 {
+  margin-top: 0.2rem;
+}
+
+.quiz-progress {
+  color: var(--muted);
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.quiz-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.quiz-choices button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 0.9rem 1rem;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  color: var(--navy);
+  cursor: pointer;
+  text-align: left;
+}
+
+.quiz-choices button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.quiz-choices button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.quiz-count {
+  font-weight: 400;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.quiz-back,
+.quiz-restart {
+  margin-top: 1.25rem;
+  background: none;
+  border: 1px solid var(--blue);
+  color: var(--blue);
+  border-radius: 999px;
+  padding: 0.5rem 1.1rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.quiz-restart {
+  background: var(--blue);
+  color: #fff;
+}
+
+.quiz-summary {
+  font-weight: 700;
+  color: var(--blue);
 }

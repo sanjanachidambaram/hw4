@@ -35,6 +35,8 @@ from starlette.middleware.sessions import SessionMiddleware
 
 import agent
 import auth
+import catalog
+import favorites
 import history as chat_history
 from models import (
     ChatHistoryMessage,
@@ -81,13 +83,14 @@ app = FastAPI(title="Campus Customs API", docs_url=None, redoc_url=None, openapi
 # Make sure the chat history table exists (e.g. on a computer with a fresh
 # database). Safe to run every time; it never changes existing data.
 chat_history.ensure_chat_table()
+favorites.ensure_favorites_table()
 
 
 @app.middleware("http")
 async def security_checks(request: Request, call_next):
     # Block form posts coming from other websites (CSRF protection). Browsers
     # always send an Origin header on these, and it must be our front end.
-    if request.method == "POST":
+    if request.method in ("POST", "DELETE"):
         origin = request.headers.get("origin")
         if origin is not None and origin not in FRONTEND_ORIGINS:
             return JSONResponse({"detail": "Forbidden"}, status_code=403)
@@ -119,7 +122,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=FRONTEND_ORIGINS,
     allow_credentials=True,  # lets the browser send the login cookie
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Content-Type"],
 )
 
@@ -462,12 +465,15 @@ def build_product_cards(product_ids: list[str], allowed_ids: set[str]) -> list[C
     return load_product_cards([pid for pid in product_ids if pid in allowed_ids])
 
 
-def load_product_cards(product_ids: list[str]) -> list[ChatProductCard]:
+def load_product_cards(
+    product_ids: list[str], limit: int | None = MAX_CHAT_CARDS
+) -> list[ChatProductCard]:
     """Fresh card details (name, price, image, stock) straight from the database.
 
-    Duplicates are dropped, unknown ids are skipped, and at most 8 are returned.
+    Duplicates are dropped, unknown ids are skipped, and at most `limit` are
+    returned (None means no limit).
     """
-    wanted = list(dict.fromkeys(product_ids))[:MAX_CHAT_CARDS]
+    wanted = list(dict.fromkeys(product_ids))[:limit]
     if not wanted:
         return []
     placeholders = ",".join("?" * len(wanted))
@@ -495,3 +501,106 @@ def load_product_cards(product_ids: list[str]) -> list[ChatProductCard]:
         for pid in wanted
         if (r := by_id.get(pid)) is not None
     ]
+
+
+# ---------- Favorites ----------
+
+def require_login(request: Request) -> int:
+    user_id, _ = current_customer(request)
+    if user_id is None:
+        raise HTTPException(401, "Please log in to save favorites.")
+    return user_id
+
+
+def product_exists(product_id: str) -> bool:
+    with closing(get_db()) as conn:
+        return conn.execute(
+            "SELECT 1 FROM catalogue WHERE product_id = ?", (product_id,)
+        ).fetchone() is not None
+
+
+@app.get("/api/favorites")
+def get_favorites(request: Request) -> dict:
+    """The logged-in shopper's own favorites: ids (for heart buttons) and cards."""
+    ids = favorites.list_ids(require_login(request))
+    return {"product_ids": ids, "products": load_product_cards(ids, limit=None)}
+
+
+@app.post("/api/favorites/{product_id}")
+def add_favorite(product_id: str, request: Request) -> dict:
+    user_id = require_login(request)
+    if not product_exists(product_id):
+        raise HTTPException(404, "Product not found")
+    favorites.add(user_id, product_id)
+    return {"product_id": product_id, "saved": True}
+
+
+@app.delete("/api/favorites/{product_id}")
+def remove_favorite(product_id: str, request: Request) -> dict:
+    favorites.remove(require_login(request), product_id)
+    return {"product_id": product_id, "saved": False}
+
+
+# ---------- "Find your fit" quiz (no AI: plain database filtering) ----------
+
+def quiz_rows() -> list[sqlite3.Row]:
+    with closing(get_db()) as conn:
+        return conn.execute(
+            """
+            SELECT c.*, COALESCE(SUM(i.quantity), 0) AS total_stock
+            FROM catalogue c
+            LEFT JOIN inventory i ON i.product_id = c.product_id
+            GROUP BY c.product_id
+            """
+        ).fetchall()
+
+
+@app.get("/api/quiz/options")
+def quiz_options() -> dict:
+    """The quiz's answer choices, plus each product's answers (no ids or prices),
+    so the page can show how many items match each button."""
+    return {
+        "kinds": catalog.CATEGORIES,
+        "colors": catalog.COLOR_FAMILIES,
+        "budgets": list(catalog.BUDGETS),
+        "items": [
+            {
+                "kind": catalog.category_of(r["garment_type"]),
+                "color": catalog.main_color_family(r["colors"]),
+                "budget": catalog.budget_of(r["price"]),
+            }
+            for r in quiz_rows()
+        ],
+    }
+
+
+@app.get("/api/quiz/results")
+def quiz_results(kind: str = "any", color: str = "any", budget: str = "any") -> dict:
+    """Products matching the quiz answers, in-stock first, then cheapest first."""
+    if kind != "any" and kind not in catalog.CATEGORIES:
+        raise HTTPException(400, "Unknown item type")
+    if color != "any" and color not in catalog.COLOR_FAMILIES:
+        raise HTTPException(400, "Unknown color")
+    if budget != "any" and budget not in catalog.BUDGETS:
+        raise HTTPException(400, "Unknown budget")
+
+    matches = [
+        r for r in quiz_rows()
+        if (kind == "any" or catalog.category_of(r["garment_type"]) == kind)
+        and (color == "any" or catalog.main_color_family(r["colors"]) == color)
+        and (budget == "any" or catalog.budget_of(r["price"]) == budget)
+    ]
+    matches.sort(key=lambda r: (r["total_stock"] == 0, r["price"], r["name"]))
+    return {
+        "products": [
+            ChatProductCard(
+                product_id=r["product_id"],
+                name=r["name"],
+                price=r["price"],
+                description=r["description"],
+                image_url=f"/api/images/{r['product_id']}",
+                total_stock=r["total_stock"],
+            )
+            for r in matches
+        ]
+    }

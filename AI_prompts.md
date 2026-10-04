@@ -237,3 +237,53 @@ Show me the results and compare to the database.
 Don't break the existing product pages, login, or chat. When you're done, explain in simple words how it all works. Then save my work with a git commit called "Problem 8: customer memory".
 
 Also, hope you're continuing to log the prompts in prompts/md
+
+## Problem 9: Usability improvements
+
+### Prompt
+
+Yahoo. On to the next. Problem 9: Usability improvements.
+
+I need to add 4 improvements to the shop: 2 on the front end (what shoppers see and click) and 2 on the agent/backend (making the chatbot smarter). Work in this order, and don't break my existing products, login, or chat.
+
+STEP 1: Write the plan
+Create output/usability.md before you build anything. For each improvement, include three things: what I added, why it helps a Campus Customs shopper or the business, and where to find it in the running app. Write it in plain, friendly English. The four improvements are:
+1. Favorites (heart button). Shoppers save items they like and see them on a Favorites page.
+2. "Find your fit" quiz. A few questions that narrow the catalogue down to good picks.
+3. Similar items tool. The chatbot suggests alternatives, especially when something is sold out.
+4. Compare tool. The chatbot lines up two or three products side by side. After building, come back and fix any detail in this file that doesn't match what you really built.
+
+First check whether my site already has either of these. If one already exists, don't rebuild it. Tell me and we'll pick something else. If not, here are my visions for each:
+
+Favorites:
+- A heart button on every product card and on the single product page. A logged-in shopper clicks to save or un-save, and a filled heart means saved.
+- If someone not logged in clicks it, show a friendly message that links to Log in. Don't crash.
+- Add a Favorites link in the nav bar and a Favorites page that shows saved items as the same product cards. If there are none, show an empty message.
+- Save favorites in the database in a new table linked to the user. Look at the database first and don't break existing tables. Create the table in the code if it's missing, because the database file isn't on GitHub.
+- Each person must only ever see their OWN favorites.
+
+Quiz:
+- Add a Quiz page with a nav bar link.
+- Look at the real catalogue first to see what item types, colors, and prices exist. Don't invent categories that aren't in the data.
+- Ask 3 or 4 simple questions with buttons (kind of item, favorite color, budget).
+- At the end, show matching products from the database as the same product cards, in-stock items first. If nothing matches, show a friendly message and a "Start over" button.
+- The quiz must NOT use the AI, because that costs money. Use a normal backend route that filters the database.
+- LMK if you have any issues with quiz questions or branching - I can provide input.
+
+STEP 3: Agent/backend tools
+
+Similar items tool:
+- Given a product, find similar products that are in stock: same kind of item, close price, matching color if possible.
+- The agent uses it when someone asks "anything like this?" or "something similar?", or when the item or size they want is sold out.
+- If the shopper is on a product page, "this" means that product (use the page context from Problem 8).
+- Return at most 3 or 4 results with name, price, colors, and a short reason it's similar. Never invent a product.
+
+Compare tool:
+- Takes two or three products and returns them side by side: name, price, description, colors, and which sizes are in stock.
+- The agent uses it for "what's the difference between X and Y?" or "which is cheaper?".
+- The tool only returns facts. The agent explains the differences in plain, friendly words and doesn't add facts that aren't in the data.
+- If a product isn't found, the agent says so instead of guessing.
+
+Update whatever files you need to make these without breaking the site or making anything crash. Double-check that all four improvements show up. Make sure .env, the database, and data/products/ are still not going to be committed. Explain in simple words how each of the four features works. Save my work with a git commit called "Problem 9: usability improvements".
+
+Create a file output/usability.md. Add the features in there in text with a description of each. I will go in and edit this manually.

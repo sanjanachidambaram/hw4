@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { fetchProduct, formatPrice, imageUrl } from "../api";
 import type { ProductDetail } from "../types";
+import HeartButton from "../components/HeartButton";
 
 const LOW_STOCK = 5;
 
@@ -44,7 +45,10 @@ export default function ProductDetailPage() {
         <div>
           <p className="muted">{product.garment_type}</p>
           <h1>{product.name}</h1>
-          <p className="price large">{formatPrice(product.price)}</p>
+          <div className="price-row">
+            <p className="price large">{formatPrice(product.price)}</p>
+            <HeartButton productId={product.product_id} productName={product.name} className="detail-heart" />
+          </div>
           <p>{product.description}</p>
           <p>
             <strong>Colors:</strong> {product.colors.join(", ")}
