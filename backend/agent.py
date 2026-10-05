@@ -4,8 +4,8 @@ The model is reached through Portkey, an AI gateway, using the
 OpenAI-compatible connection described in the PydanticAI docs
 (OpenAIProvider with a custom AsyncOpenAI client).
 
-The PORTKEY_API_KEY is read from the course-folder .env (one level above
-HW4), so the key is never copied into this project.
+The PORTKEY_API_KEY is read from hw4/.env (see .env.example) or, if it's not
+there, from the course-folder .env one level above. .env files are gitignored.
 """
 
 import os
@@ -29,7 +29,8 @@ from tools import ALL_TOOLS, ChatDeps
 
 BACKEND_DIR = Path(__file__).resolve().parent
 PROMPT_PATH = BACKEND_DIR / "prompts" / "prompt.md"
-COURSE_ENV_PATH = BACKEND_DIR.parent.parent / ".env"  # AI Foundations/.env
+PROJECT_ENV_PATH = BACKEND_DIR.parent / ".env"  # hw4/.env
+COURSE_ENV_PATH = BACKEND_DIR.parent.parent / ".env"  # course folder .env (optional)
 
 MODEL_NAME = "gpt-5.6-luna"
 PORTKEY_BASE_URL = "https://api.portkey.ai/v1"
@@ -50,9 +51,15 @@ class ChatUnavailable(RuntimeError):
 
 
 def _load_portkey_key() -> str:
-    key = os.getenv("PORTKEY_API_KEY") or dotenv_values(COURSE_ENV_PATH).get("PORTKEY_API_KEY")
-    if not key:
-        raise ChatUnavailable(f"PORTKEY_API_KEY not found in {COURSE_ENV_PATH}")
+    """Find the key: environment (incl. hw4/.env loaded by main.py), then hw4/.env,
+    then the course-folder .env one level above hw4."""
+    key = (
+        os.getenv("PORTKEY_API_KEY")
+        or dotenv_values(PROJECT_ENV_PATH).get("PORTKEY_API_KEY")
+        or dotenv_values(COURSE_ENV_PATH).get("PORTKEY_API_KEY")
+    )
+    if not key or key == "your-portkey-api-key-here":
+        raise ChatUnavailable("PORTKEY_API_KEY not found. Copy .env.example to .env and add your key.")
     return key
 
 

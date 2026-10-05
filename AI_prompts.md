@@ -360,3 +360,31 @@ Add to it. Don't replace what's already there. Read my actual code first so ever
 - Specs: the agent's loop limits, the caps on results, which AI model is used, and the exact commands to run the front end and the back end.
 
 Yes
+
+## Problem 13: Push to GitHub and submit the URL
+
+### Prompt
+
+Final problem - Problem 13: Push to GitHub and submit the URL.
+
+My code needs to be in a folder named hw4 and pushed to a public GitHub repository. Here is the layout I need:
+
+hw4/
+  AI_prompts.md
+  requirements.txt
+  .env.example
+  .gitignore
+  README.md
+  frontend/   (Vite React TypeScript app)
+  backend/    main.py, agent.py, models.py, tools.py, prompts/prompt.md
+  output/     harness.md, design.md, usability.md, app_check.html, app_check_images/, audit_trail.json
+
+The data/ folder (campus_customs.db and products/) stays on my computer only and is not in git.
+
+Please do this:
+1. Compare my project to this layout. Create anything that's missing (like README.md, .env.example, requirements.txt). If there are extra files that aren't in the layout, list them and ask me before deleting anything.
+2. Do NOT put my real .env, campus_customs.db, or the product images in the repo. Use .gitignore for this.
+3. Write README.md explaining how to run the front end and the back end after placing the data pack in data/.
+4. Before pushing, show me the list of files that would go online, confirm that .env, the database, and the product images aren't in it, and wait for my OK.
+
+Then explain in simple words what you did and send me a link.

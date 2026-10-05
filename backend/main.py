@@ -56,12 +56,15 @@ DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "campus_customs.db"
 IMAGES_DIR = (DATA_DIR / "products").resolve()
 
+# Secrets: hw4/.env (see .env.example) first, then backend/.env. Values already
+# loaded are never overwritten.
+load_dotenv(BASE_DIR / ".env")
 load_dotenv(Path(__file__).resolve().parent / ".env")
 SESSION_SECRET = os.getenv("SESSION_SECRET", "")
 if len(SESSION_SECRET) < 32 or SESSION_SECRET == "change-me":
     raise RuntimeError(
-        "SESSION_SECRET is missing or too short. Copy backend/.env.example to "
-        "backend/.env and set a long random value."
+        "SESSION_SECRET is missing or too short. Copy .env.example to .env "
+        "(in the hw4 folder) and set a long random value."
     )
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 SESSION_MAX_AGE = 7 * 24 * 60 * 60  # logged-in sessions expire after 7 days

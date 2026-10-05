@@ -11,8 +11,10 @@ frontend/dist/
 .env.*
 !.env.example
 
-# The database contains user emails and password hashes; keep it out of public repos
-data/*.db
+# The data pack stays on your computer only: campus_customs.db (user emails and
+# password hashes) and products/ (the assignment's product photos).
+data/
 
-# Product photos (provided with the assignment; not ours to publish)
-data/products/
+# Temporary files from the audit trail writer
+output/*.tmp
+output/audit_trail.unreadable-*.json
