@@ -319,3 +319,19 @@ Then, tell me what you changed, why, and how.
 Hi - we got disconnected during the last prompt. Continue that work.
 
 Yes, commit it
+
+Sorry - name the file called output/design.md "design rules" instead, and store it in the project root. Then, create a new file under output called design.md. Here, write no more than 10 bullets with a quick overview of the design changes. I will go in and edit it.
+
+## Problem 11: Site testing (app check)
+
+### Prompt
+
+Great! Onto Problem 11: Site testing (app check). I'll be asking you to do some stuff, and then I'll provide some screenshots.
+
+I need a page called output/app_check.html that I can double-click to open. I will next send you some screenshots of my site to put in here. With the screenshots, I'll need you to understand what they show and write a 1-sentence description of what's in them. This is all for site testing. Format the file for me with three sections: Chat inventory check, Search result cards, and Problem 9 feature.  Keep to this structure: heading, screenshot, 1 sentence description (I'll give the screenshots). When I give you the images, link them from app_check.html with relative paths.
+
+Pause - site broke! Why isn't my back end server running?
+
+[3 screenshots attached] section 1, 2, and 3
+
+commit it as "Problem 11: app check"

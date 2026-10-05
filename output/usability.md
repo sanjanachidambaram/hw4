@@ -4,7 +4,7 @@ I made the following improvements to make shopping easier:.
 
 ---
 
-## 1. Favorites ❤️
+## 1. Favorites
 
 **What I added:** A heart button on every product card and on each product's own page, which can be used like a general / generic like button. Logged-in shoppers can heart and save product cards to the Favorites section. The heart is on every single product card and the Favorites link is in the top navigation bar.
 
@@ -12,7 +12,7 @@ I made the following improvements to make shopping easier:.
 
 ---
 
-## 2. "Find your fit" quiz 🧭
+## 2. "Find your fit" quiz
 
 **What I added:** A short quiz with three button questions, built from what's actually in the catalogue:
 - **What are you looking for?** T-shirts, Crewnecks, Hoodies, Quarter-zips, Jackets & fleece, Long-sleeve shirts, or Surprise me.
@@ -33,17 +33,10 @@ Then, it shows matching products. This is located in the Quiz link in the naviga
 
 ---
 
-## 4. Compare (chatbot) ⚖️
+## 4. Compare (chatbot)
 
 **What I added:** A new chatbot feature that lines up products side by side and compares them, using facts from the database.
 
 **Why it helps:** Shoppers can find a quick and easy answer to differentiate similar products. For example, asking, "What's the difference between the Champion hoodie and the basic one?" will return a clear description of how one has a simpler design, slightly different wording, etc.
 
----
-
-## Tested and working
-
-- **Favorites:** a guest click shows the log-in message. When logged in, save, un-save, the Favorites page, the product-page heart, and the empty message all work, and each person only sees their own favorites.
-- **Quiz:** all three questions work. Hoodies + Navy & blue + $50 to $75 gives 15 picks, which matches the database. Dead-end answers are greyed out, and the no-results message and Start over work.
-- **Similar items:** on the Baseball Left Chest Crewneck page, "Do you have this in XS? If not, anything similar?" gave: XS is sold out, plus 4 crewnecks with XS in stock, all $58.
-- **Compare:** the Basic Hoodie vs. Champion Reverse Weave Hoodie answer matched the database (same $68 price; the Champion is sold out in XS and XL). Asking to compare with a "Harvard Crimson Hoodie" got an honest "couldn't find that product."
+NOTE: I also noticed later on (during the design process) that there wasn't an "Add to Cart" button, and later added that functionality so it fully feels like customers can buy their products.
