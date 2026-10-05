@@ -1,16 +1,14 @@
 # Campus Customs: Usability Improvements
 
-Four improvements to make shopping easier: two on the website, and two that make the chatbot smarter.
+I made the following improvements to make shopping easier:.
 
 ---
 
 ## 1. Favorites ❤️
 
-**What I added:** A heart button on every product card and on each product's own page. Logged-in shoppers click the heart to save an item (the heart fills in) and click again to un-save it. A new **Favorites** page shows everything they've saved, newest first, using the same product cards as the rest of the shop. Un-saving an item on that page removes it right away. If nothing is saved yet, the page says so and links to the Products page.
+**What I added:** A heart button on every product card and on each product's own page, which can be used like a general / generic like button. Logged-in shoppers can heart and save product cards to the Favorites section. The heart is on every single product card and the Favorites link is in the top navigation bar.
 
-**Why it helps:** Shoppers often browse before they buy, like comparing a few hoodies or picking a gift for a parent. Favorites let them build a short list instead of hunting for items again later. For the business, saved items show what people are interested in, and they bring shoppers back.
-
-**Where to find it:** The heart is on every product card (Products page, Home page, Favorites page, and cards in the chat) and next to the price on a product's page. The **Favorites** link is in the top nav bar. If you're not logged in and click a heart, a friendly message pops up in the bottom-left corner with a **Log in** link (nothing is saved, and nothing breaks). Logged-out visitors who open the Favorites page see a note inviting them to log in or create an account.
+**Why it helps:** This allows shoppers to remember and compare the items they like -- this way, if they're browsing on their phone before they buy, they can look at their laptop and view their saved items before. This works for other use cases as well.
 
 ---
 
@@ -21,31 +19,25 @@ Four improvements to make shopping easier: two on the website, and two that make
 - **Pick a color:** Navy & blue, Gray, White & cream, or No preference. These are the garments' main colors; other colors only appear in logos.
 - **What's your budget?** Under $50, $50 to $75, Over $75, or Any price.
 
-It then shows the matching products from the catalogue as product cards (with hearts), in-stock items first, then cheapest first. Each answer button shows how many items match so far, and buttons that would lead to zero results are greyed out. If nothing matches, there's a friendly message and a **Start over** button. A **Back** button lets shoppers change an earlier answer.
+Then, it shows matching products. This is located in the Quiz link in the navigation bar.
 
-**Why it helps:** With 102 products, a new shopper or a visiting parent can feel overwhelmed. The quiz gets them to a handful of good picks in three clicks. It's free to run, since it filters the catalogue directly and doesn't use the AI.
-
-**Where to find it:** The **Quiz** link in the top nav bar.
+**Why it helps:** This fun quiz allows shoppers to quickly and easily see exactly what picks are perfect for them. The filter works on the catalogue directly and doesn't use AI, so it's free! 102 products, a new shopper or a visiting parent can feel overwhelmed. The quiz gets them to a handful of good picks in three clicks. It's free to run, since it filters the catalogue directly and doesn't use the AI.
 
 ---
 
 ## 3. Similar items (chatbot) 🔄
 
-**What I added:** A new chatbot tool that finds in-stock alternatives to a product: the same kind of item, a close price, and a matching color when possible. It returns up to 4 suggestions, each with a short reason built from the data (for example "also a hoodie; same price; also navy blue"). If the shopper needs a particular size, it only suggests items with that size in stock.
+**What I added:** A new chatbot feature that finds in-stock alternatives to a product: the same kind of item, a close price, and a matching color when possible, returning up to four suggestions.
 
-**Why it helps:** When a hoodie is sold out in someone's size, the bot can offer a close alternative instead of a dead end. That keeps the shopper happy and keeps the sale.
-
-**Where to find it:** In the chat (bottom-right corner). Ask "anything like this?" or "something similar?". On a product page, "this" means the product you're looking at. The bot also offers alternatives on its own when an item or size is sold out.
+**Why it helps:** When a hoodie is sold out in someone's size, the bot can offer a close alternative instead of a dead end. For example, if you say, "I want a L Boola Boola t shirt," the chatbot now suggests other similar items, since it is out of stock.
 
 ---
 
 ## 4. Compare (chatbot) ⚖️
 
-**What I added:** A new chatbot tool that lines up two or three products side by side: name, kind of item, price, description, colors, and which sizes are in stock or sold out. The tool only returns facts from the database. The chatbot explains the differences in friendly words, without adding anything that isn't in the data.
+**What I added:** A new chatbot feature that lines up products side by side and compares them, using facts from the database.
 
-**Why it helps:** "What's the difference between the Champion hoodie and the basic one?" is a common shopping question. A clear side-by-side answer helps people decide quickly and confidently.
-
-**Where to find it:** In the chat. Ask things like "what's the difference between X and Y?", "compare these two", or "which is cheaper?". If the bot can't find one of the products, it says so instead of guessing.
+**Why it helps:** Shoppers can find a quick and easy answer to differentiate similar products. For example, asking, "What's the difference between the Champion hoodie and the basic one?" will return a clear description of how one has a simpler design, slightly different wording, etc.
 
 ---
 

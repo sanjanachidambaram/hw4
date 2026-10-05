@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { fetchProduct, formatPrice, imageUrl } from "../api";
 import type { ProductDetail } from "../types";
 import HeartButton from "../components/HeartButton";
+import { SizePicker } from "../components/AddToCart";
 
 const LOW_STOCK = 5;
 
@@ -49,6 +50,7 @@ export default function ProductDetailPage() {
             <p className="price large">{formatPrice(product.price)}</p>
             <HeartButton productId={product.product_id} productName={product.name} className="detail-heart" />
           </div>
+          <SizePicker productId={product.product_id} productName={product.name} sizes={product.inventory} />
           <p>{product.description}</p>
           <p>
             <strong>Colors:</strong> {product.colors.join(", ")}

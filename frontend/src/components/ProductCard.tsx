@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { formatPrice, imageUrl } from "../api";
 import type { CardProduct } from "../types";
 import HeartButton from "./HeartButton";
+import { CardAddToCart } from "./AddToCart";
 
 const SHORT_DESCRIPTION_LENGTH = 90;
 
@@ -28,6 +29,11 @@ export default function ProductCard({ product }: { product: CardProduct }) {
         </div>
       </Link>
       <HeartButton productId={product.product_id} productName={product.name} className="card-heart" />
+      {product.total_stock > 0 && (
+        <div className="card-actions">
+          <CardAddToCart productId={product.product_id} productName={product.name} />
+        </div>
+      )}
     </div>
   );
 }

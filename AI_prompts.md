@@ -287,3 +287,35 @@ Compare tool:
 Update whatever files you need to make these without breaking the site or making anything crash. Double-check that all four improvements show up. Make sure .env, the database, and data/products/ are still not going to be committed. Explain in simple words how each of the four features works. Save my work with a git commit called "Problem 9: usability improvements".
 
 Create a file output/usability.md. Add the features in there in text with a description of each. I will go in and edit this manually.
+
+## Problem 10: Style the website
+
+### Prompt
+
+Next, Prompt 10: Style the website.
+
+I want my shop to look very professional, like a real store people would trust. Don't break anything while adding aesthetic changes.
+
+BEFORE ANYTHING: Add an add to cart button. I forgot about this - but make sure you can add every item to a shopping cart, which icon you can visit and see all of the items in your cart. Test the functionality and ensure it works well.
+
+STEP 1:
+Create output/design.md before you change any code. Put these in it:
+- Design guidelines: a color palette (a main color, an accent color for buttons, neutral backgrounds), 1 or 2 fonts, spacing, button styles, and how cards and pages should look. Keep it feeling like a classy campus merch store, but don't copy yalebulldogblue.com's layout or images, and don't use any Yale logos. Add some pizazz that's professional, but not too flashy. Think: inspo from Adidas, Abercrombie, etc. I don't want it super corporate and tasteless.
+- A list of the design improvements you plan to make.
+Write it in plain, friendly English.
+
+STEP 2: Build the improvements
+Look at the site as it is first, then apply the guidelines across the whole site:
+- Fonts: use nice, free fonts.
+- Colors: use the palette everywhere. Make sure text is easy to read against its background.
+- Add to cart buttons: make them a bold accent color that stands out, with a hover effect.
+- Stock photos: add a few professional, free-to-use photos, such as a hero image on the Home page and one on About Us. Do not replace my real product images, which must stay on the product cards.
+
+STEP 3: Wrap up the write-up
+Come back to output/design.md and add a section for what I actually changed. For each change, say what I changed, why it helps customers stick around and buy things, and where to find it on the site. Write it in bullets so I can edit it.
+
+Then, tell me what you changed, why, and how.
+
+Hi - we got disconnected during the last prompt. Continue that work.
+
+Yes, commit it

@@ -4,6 +4,10 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { AuthProvider } from "./AuthContext";
 import { FavoritesProvider } from "./FavoritesContext";
+import { CartProvider } from "./CartContext";
+// Free fonts bundled with the site (no outside font server).
+import "@fontsource-variable/fraunces";
+import "@fontsource-variable/inter";
 import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
@@ -11,7 +15,9 @@ createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <AuthProvider>
         <FavoritesProvider>
-          <App />
+          <CartProvider>
+            <App />
+          </CartProvider>
         </FavoritesProvider>
       </AuthProvider>
     </BrowserRouter>
