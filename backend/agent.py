@@ -20,8 +20,10 @@ from pydantic_ai.messages import ModelMessage
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
+from pydantic_ai.exceptions import ModelHTTPError, UsageLimitExceeded
 from pydantic_ai.usage import UsageLimits
 
+import audit
 from models import AgentReply
 from tools import ALL_TOOLS, ChatDeps
 
@@ -136,10 +138,22 @@ async def ask(
     shoppers, or from memory for guests. Returns the AI's AgentReply
     (text + product_ids) and this turn's new messages.
     """
-    result = await get_agent().run(
-        message,
-        deps=deps,
-        message_history=history,
-        usage_limits=USAGE_LIMITS,
-    )
-    return result.output, result.new_messages()
+    stop_reason = "error"
+    try:
+        result = await get_agent().run(
+            message,
+            deps=deps,
+            message_history=history,
+            usage_limits=USAGE_LIMITS,
+        )
+        stop_reason = "answered"
+        return result.output, result.new_messages()
+    except UsageLimitExceeded:
+        stop_reason = "usage_limit"
+        raise
+    except ModelHTTPError as exc:
+        stop_reason = "content_filter" if "content_filter" in str(exc.body) else "error"
+        raise
+    finally:
+        # Record this turn's tool calls, however it ended. Never raises.
+        audit.record(deps.audit_entries, stop_reason)

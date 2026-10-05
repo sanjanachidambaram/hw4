@@ -34,6 +34,7 @@ from pydantic_ai.exceptions import ModelHTTPError, UsageLimitExceeded
 from starlette.middleware.sessions import SessionMiddleware
 
 import agent
+import audit
 import auth
 import catalog
 import favorites
@@ -84,6 +85,7 @@ app = FastAPI(title="Campus Customs API", docs_url=None, redoc_url=None, openapi
 # database). Safe to run every time; it never changes existing data.
 chat_history.ensure_chat_table()
 favorites.ensure_favorites_table()
+audit.ensure_file()  # output/audit_trail.json: created if missing, never reset
 
 
 @app.middleware("http")
@@ -340,7 +342,8 @@ chat_limiter_ip = auth.RateLimiter(max_attempts=20, window_seconds=10 * 60)
 # Map site paths to simple page names. Only these names reach the AI, never
 # the raw path the browser sent.
 PAGE_NAMES = {"/": "home", "/products": "products", "/about": "about",
-              "/login": "login", "/signup": "signup"}
+              "/login": "login", "/signup": "signup", "/quiz": "quiz",
+              "/favorites": "favorites", "/cart": "cart"}
 
 FILTERED_REPLY = "Sorry, I can't help with that. I'm here to help with Campus Customs products, prices, and sizes!"
 

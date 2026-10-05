@@ -15,6 +15,7 @@ from pathlib import Path
 from pydantic_ai import RunContext
 
 import catalog
+from audit import audited
 from models import (
     CatalogueMatch,
     ComparedProduct,
@@ -90,6 +91,8 @@ class ChatDeps:
     # Every product id a tool returned during this turn. The AI may only show
     # cards for these, so it can't invent a product.
     seen_ids: set[str] = field(default_factory=set)
+    # Short records of each tool call this turn, written to output/audit_trail.json.
+    audit_entries: list[dict] = field(default_factory=list)
 
 
 def _read_only_db() -> sqlite3.Connection:
@@ -106,12 +109,23 @@ def _words(text: str) -> set[str]:
     return set(re.findall(r"[a-z0-9]+", text.lower()))
 
 
+# Words the catalogue uses for the same kind of item. Some hoodies are listed
+# as a "hood" or "hooded sweatshirt" and never say "hoodie".
+WORD_VARIANTS = {"hoodie": {"hood", "hooded"}}
+
+
 def _word_matches(word: str, words: set[str]) -> bool:
-    """True if the whole word, or its singular ("hoodies" -> "hoodie"), appears.
+    """True if the whole word, its singular ("hoodies" -> "hoodie"), or a known
+    variant ("hoodie" -> "hooded") appears.
 
     Whole words only, so "shirt" doesn't match inside "sweatshirt".
     """
     if word in words:
+        return True
+    singular = word[:-2] if word.endswith("es") and word[:-2] in WORD_VARIANTS else (
+        word[:-1] if word.endswith("s") else word
+    )
+    if WORD_VARIANTS.get(singular, set()) & words:
         return True
     if len(word) > 3 and word.endswith("es") and word[:-2] in words:
         return True
@@ -424,10 +438,12 @@ def compare_products(ctx: RunContext[ChatDeps], product_ids: list[str]) -> Compa
     return ComparisonResult(products=found, not_found=not_found, note=note)
 
 
+# Every tool is wrapped so each call is recorded in the audit trail, and so a
+# failing tool returns a short error instead of crashing the reply.
 ALL_TOOLS = [
-    search_catalogue,
-    get_product_details,
-    check_size_stock,
-    find_similar_products,
-    compare_products,
+    audited(search_catalogue),
+    audited(get_product_details),
+    audited(check_size_stock),
+    audited(find_similar_products),
+    audited(compare_products),
 ]

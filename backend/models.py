@@ -92,7 +92,9 @@ class CatalogueMatch(BaseModel):
     product_id: str = Field(description="Use this id with the other tools and in product_ids.")
     name: str
     category: str = Field(description="Kind of item, e.g. 'pullover hoodie'.")
-    colors: list[str] = Field(description="Colors this product comes in.")
+    colors: list[str] = Field(
+        description="Colors listed for this product. The FIRST is the garment's main color; the rest are usually logo or trim colors."
+    )
     price: float = Field(description="Price in US dollars.")
     in_stock: bool = Field(description="True if at least one size is available.")
 
