@@ -388,3 +388,5 @@ Please do this:
 4. Before pushing, show me the list of files that would go online, confirm that .env, the database, and the product images aren't in it, and wait for my OK.
 
 Then explain in simple words what you did and send me a link.
+
+OK
